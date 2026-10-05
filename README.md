@@ -6,6 +6,8 @@ NTU COOL 課程巡檢與瀏覽器工作流程。每 600 秒掃描所有已選課
 
 ## 安裝
 
+其他電腦部署請交給 Codex 閱讀 [Installation Guide](doc/installation-guide.md)，包含可直接貼上的部署指令、登入與模型／Discord 驗證、常駐排程、故障處理及換機還原。
+
 Windows、Python 3.10 以上，另需已安裝且登入的 Codex CLI：
 
 ```powershell
@@ -13,11 +15,10 @@ python -m venv .venv
 .venv\Scripts\python.exe -m pip install -e ".[dev]"
 .venv\Scripts\python.exe -m playwright install chromium
 codex login
-if (-not (Test-Path .env)) { Copy-Item .env.example .env }
-notepad .env
+powershell.exe -NoProfile -STA -ExecutionPolicy Bypass -File .\scripts\ConfigureEnv.ps1
 ```
 
-帳密只填本機 `.env`。`COOL_COURSE_IDS=all` 代表所有學生課程，助教課程會略過；也可指定逗號分隔 ID。模型固定 `LLM_MODEL=gpt-6.1-sol`，使用 Codex CLI 自己的登入，無須把 API 金鑰交給程式。[Codex 官方文件](https://developers.openai.com/codex/noninteractive)
+帳密由本機對話框輸入並保存至 `.env`，密碼與 Webhook 遮蔽，不經 Codex 聊天；保存後清空欄位並關閉輸入程序。已有設定保留，留空欄位不覆蓋原值。`COOL_COURSE_IDS=all` 代表所有學生課程，助教課程會略過；也可指定逗號分隔 ID。模型固定 `LLM_MODEL=gpt-6.1-sol`，使用 Codex CLI 自己的登入，無須把 API 金鑰交給程式。[Codex 官方文件](https://developers.openai.com/codex/noninteractive)
 
 ## 操作
 
