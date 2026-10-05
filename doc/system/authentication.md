@@ -1,5 +1,7 @@
 # 登入與憑證
 
+本文件保留完整設計目標。目前程式、已驗證介面與未完成項目請以 [實作狀態](implementation.md) 為準。
+
 [實作計畫](../plan.md) · [系統架構](architecture.md) · [環境設定](configuration.md)
 
 ## 輸入與成功條件

@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=65"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "credit-scammer"
+version = "0.1.0"
+description = "NTU COOL course monitoring and browser workflow automation"
+requires-python = ">=3.10"
+dependencies = [
+  "playwright==1.63.0",
+  "python-dotenv==1.2.4",
+  "pypdf==6.19.0",
+  "reportlab==5.0.1",
+  "tzdata==2026.5",
+]
+
+[project.optional-dependencies]
+dev = ["pytest==9.1.1", "pytest-asyncio==1.4.0", "ruff==0.16.10"]
+
+[project.scripts]
+credit-scammer = "credit_scammer.main:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+credit_scammer = ["*.sql", "*.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]

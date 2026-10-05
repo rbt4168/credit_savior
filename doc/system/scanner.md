@@ -1,5 +1,7 @@
 # 課程巡檢詳細設計
 
+本文件保留完整設計目標。目前程式、已驗證介面與未完成項目請以 [實作狀態](implementation.md) 為準。
+
 [實作計畫](../plan.md) · [資料模型](data-model.md) · [平台整合](platform-integration.md)
 
 ## 輸入、輸出與限制

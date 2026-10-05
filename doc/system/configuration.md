@@ -1,10 +1,12 @@
 # 環境設定
 
+本文件保留完整設計目標。目前程式、已驗證介面與未完成項目請以 [實作狀態](implementation.md) 為準。
+
 [實作計畫](../plan.md) · [登入設計](authentication.md) · [常駐部署](operations.md)
 
 ## 現有檔案與載入規則
 
-目前 repository 已有 [.env.example](../../.env.example)，本機已有被 Git 忽略的 .env。程式尚未實作；現有設定不會啟動任何操作。
+目前 repository 已有 [.env.example](../../.env.example)，本機已有被 Git 忽略的 .env。第一版程式已實作，啟動方式見 README。
 
 規劃載入優先順序為程序環境變數 → repository 根目錄 .env → 程式預設值。.env parser 選用時必須支援 UTF-8、引號與含 # 的密碼，且不覆蓋已存在的程序環境變數。未知欄位保留不使用；必要欄位錯誤一次列出欄位名稱，不輸出值。
 

@@ -1,6 +1,6 @@
 # NTU COOL 自動化實作計畫
 
-本文件定義系統目標、工作拆解與驗收；詳細介面與資料契約位於 doc/system。此階段只交付計畫、詳細設計與設定範本，沒有已運行的巡檢程序，也沒有登入、提交作業或更改影片觀看紀錄。
+本文件定義系統目標、工作拆解與驗收；詳細介面與資料契約位於 doc/system。第一版程式已實作；實際支援範圍與驗證證據見 [實作狀態](system/implementation.md)。
 
 ## 需求與完成條件
 
@@ -19,7 +19,7 @@
 
 ## 第一版範圍
 
-單帳號、單 Windows 主機、明確指定 course ID。採 Python、Playwright Chromium、SQLite。以 browser UI 讀取與提交，先支援文字回答／檔案上傳與一種已驗證播放器；第二種播放器與程式題型按驗收順序加入。
+單帳號、單 Windows 主機、全部學生課程（COOL_COURSE_IDS=all）或指定 course ID。採 Python、Playwright Chromium、SQLite。以瀏覽器登入狀態的 Canvas GET 讀取，以 browser UI 提交，先支援文字回答／檔案上傳與一種已驗證播放器；第二種播放器與程式題型按驗收順序加入。
 
 程式作業需先有隔離 runner；不支援的小組作業、線上測驗與外部工具保存 needs_input。第一版不建立管理網站、多帳號服務或外部通知。缺資料與未決結果是具體任務狀態，不是每次都需人工批准的提交流程。
 
@@ -34,7 +34,7 @@ NTU COOL 使用 Canvas LMS 為基礎，另有自訂影片模組與學習足跡�
 | 指定課程 ID／網址 | 填入本機 COOL_COURSE_IDS。 | 真實課程巡檢。 |
 | 帳密與額外驗證 | 本機 .env 及可見 auth 流程，不寫入對話文件。 | 真實登入。 |
 | 測試課程與代表性題目 | 指定可驗收的文字／檔案作業。 | 真實提交驗收。 |
-| 模型服務、endpoint、模型及金鑰 | 選定一個服務並填入本機設定。 | Solver 整合。 |
+| 模型與 Codex 登入 | 已選 gpt-6.1-sol，使用本機 Codex CLI 登入。 | Solver 整合。 |
 | 影片與學生可讀進度頁 | 登入後勘查、保存去識別化 fixture。 | 真實觀看完成核對。 |
 | 程式 runtime 與 runner | 依代表性程式作業固定 image 與測試。 | 程式題型啟用。 |
 

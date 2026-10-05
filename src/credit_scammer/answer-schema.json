@@ -1,0 +1,63 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "answer_kind",
+    "answer_text",
+    "artifacts",
+    "missing_information"
+  ],
+  "properties": {
+    "answer_kind": {
+      "type": "string",
+      "enum": [
+        "text",
+        "files"
+      ]
+    },
+    "answer_text": {
+      "type": "string"
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "logical_name",
+          "format",
+          "content"
+        ],
+        "properties": {
+          "logical_name": {
+            "type": "string"
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "txt",
+              "md",
+              "pdf",
+              "py",
+              "js",
+              "ts",
+              "java",
+              "c",
+              "cpp",
+              "sql"
+            ]
+          },
+          "content": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "missing_information": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}
