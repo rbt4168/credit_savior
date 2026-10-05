@@ -1,0 +1,18 @@
+# Local credentials and environment overrides
+.env
+.env.*
+!.env.example
+
+# Authenticated browser state and runtime artifacts
+playwright/.auth/
+data/
+logs/
+test-results/
+playwright-report/
+
+# Python development files
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/
