@@ -1,3 +1,19 @@
+<p align="center">
+  <img src="assets/credit-savior-banner.png" alt="Credit Savior — NTU COOL course automation" width="100%">
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square" alt="Python 3.10 or newer">
+  <img src="https://img.shields.io/badge/Playwright-1.63.0-2EAD33?style=flat-square" alt="Playwright 1.63.0">
+  <img src="https://img.shields.io/badge/Codex%20CLI-0.160.0-111827?style=flat-square" alt="Codex CLI 0.160.0 verified">
+  <img src="https://img.shields.io/badge/Model-GPT--6.1--Sol-0D9488?style=flat-square" alt="GPT-6.1-Sol">
+  <br>
+  <img src="https://img.shields.io/badge/python--dotenv-1.2.4-7C3AED?style=flat-square" alt="python-dotenv 1.2.4">
+  <img src="https://img.shields.io/badge/pypdf-6.19.0-2563EB?style=flat-square" alt="pypdf 6.19.0">
+  <img src="https://img.shields.io/badge/ReportLab-5.0.1-DC2626?style=flat-square" alt="ReportLab 5.0.1">
+  <img src="https://img.shields.io/badge/tzdata-2026.5-64748B?style=flat-square" alt="tzdata 2026.5">
+</p>
+
 # Credit Savior
 
 把 NTU COOL 的巡課、作業與影片進度交給 coding agent，完成結果直接送到 Discord。

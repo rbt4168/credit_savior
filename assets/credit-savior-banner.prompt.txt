@@ -1,0 +1,7 @@
+Use case: ads-marketing
+Asset type: polished GitHub repository README hero banner, wide landscape approximately 3:1.
+Primary request: a premium banner for the project Credit Savior, which helps students manage NTU COOL courses, assignments, video watching and completion notifications.
+Style: refined editorial illustration with dimensional objects and exceptionally clean typography, suitable for a well-known open-source repository. Deep midnight blue background with restrained teal and warm cream accents, subtle texture, generous spacing.
+Composition: large legible wordmark occupying the left half; on the right an elegant integrated illustration of an open book with a life preserver, small abstract course cards showing a checkmark and play symbol. Subtle rather than busy. Balanced generous outer margins.
+Text (verbatim): "Credit Savior" as the large primary title, "NTU COOL course automation" as a smaller subtitle. Render both exactly with beautiful crisp typography.
+Constraints: only those two text lines. No actual private course data, no personal details, no credentials, no official university logo or seal, no fake screenshot, no watermarks. Full-bleed opaque background. Highly readable when displayed at 900 pixels wide.
