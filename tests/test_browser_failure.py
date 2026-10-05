@@ -3,9 +3,9 @@ from types import SimpleNamespace
 import pytest
 from playwright.async_api import Error as BrowserError
 
-from credit_scammer.errors import WorkflowError
-from credit_scammer.models import Video
-from credit_scammer.workers import execute_claimed
+from credit_savior.errors import WorkflowError
+from credit_savior.models import Video
+from credit_savior.workers import execute_claimed
 
 
 async def test_closed_browser_stops_worker_without_consuming_rest_of_queue(config, store):

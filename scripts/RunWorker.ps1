@@ -13,7 +13,7 @@ New-Item -ItemType Directory -Path $logDirectory -Force | Out-Null
 $consolePath = Join-Path $logDirectory 'supervisor.log'
 while ($true) {
     # Credentials are loaded by Python, never interpolated into process arguments.
-    & $pythonPath -m credit_scammer --root $repoRoot run >> $consolePath 2>&1
+    & $pythonPath -m credit_savior --root $repoRoot run >> $consolePath 2>&1
     $workerCode = $LASTEXITCODE
     if ($workerCode -ne 30 -or $retryCount -ge $retryDelays.Count) { exit $workerCode }
     Start-Sleep -Seconds $retryDelays[$retryCount]

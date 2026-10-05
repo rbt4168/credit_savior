@@ -2,13 +2,13 @@ from dataclasses import replace
 
 import pytest
 
-from credit_scammer.artifacts import artifact_path
-from credit_scammer.config import Config
-from credit_scammer.errors import ConfigError, LeaseLost, WorkflowError
-from credit_scammer.models import Attachment, Submission
-from credit_scammer.progress import coverage
-from credit_scammer.scanner import next_tick
-from credit_scammer.store import Store
+from credit_savior.artifacts import artifact_path
+from credit_savior.config import Config
+from credit_savior.errors import ConfigError, LeaseLost, WorkflowError
+from credit_savior.models import Attachment, Submission
+from credit_savior.progress import coverage
+from credit_savior.scanner import next_tick
+from credit_savior.store import Store
 
 
 def enqueue(store, assignment):

@@ -3,9 +3,9 @@ from dataclasses import replace
 import pytest
 from pypdf import PdfReader
 
-from credit_scammer.errors import WorkflowError
-from credit_scammer.solver import CodexSolver, decode_symbol_text
-from credit_scammer.validation import validate
+from credit_savior.errors import WorkflowError
+from credit_savior.solver import CodexSolver, decode_symbol_text
+from credit_savior.validation import validate
 
 
 def test_symbol_font_is_decoded_using_font_encoding():

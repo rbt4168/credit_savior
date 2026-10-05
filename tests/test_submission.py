@@ -6,9 +6,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from credit_scammer.artifacts import write_json
-from credit_scammer.assignments import AssignmentWorker, matches_receipt
-from credit_scammer.models import Answer, Submission, now_ms
+from credit_savior.artifacts import write_json
+from credit_savior.assignments import AssignmentWorker, matches_receipt
+from credit_savior.models import Answer, Submission, now_ms
 
 
 class PowerLoss(BaseException):
@@ -107,7 +107,7 @@ async def test_new_deadline_during_staging_prevents_click(config, assignment, st
         await original(*args)
         client.assignment = replace(assignment, due_at_ms=now_ms()-1)
     client.stage_answer = stage
-    from credit_scammer.errors import WorkflowError
+    from credit_savior.errors import WorkflowError
     with pytest.raises(WorkflowError):
         await worker.process(store.claim('assignment', 'owner'), 'owner')
     assert client.clicks == 0
@@ -125,8 +125,8 @@ def test_receipt_requires_bytes_and_recent_submission():
 
 
 async def test_ended_video_without_platform_confirmation_is_not_success(config, store):
-    from credit_scammer.models import Video
-    from credit_scammer.videos import VideoWorker
+    from credit_savior.models import Video
+    from credit_savior.videos import VideoWorker
     video = Video('1', '7', 'https://cool.ntu.edu.tw/courses/1/modules/items/9', 'revision')
     store.upsert_video(video)
     write_json(config.data_dir / 'videos/test.json', video.to_dict())

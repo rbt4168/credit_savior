@@ -14,12 +14,12 @@
 
 | 指令 | 前置條件 | 行為 |
 | --- | --- | --- |
-| python -m credit_scammer auth | 本機登入設定與可見桌面。 | 可見瀏覽器完成驗證，保存狀態。 |
-| python -m credit_scammer run | 課程設定、有效狀態或可恢復登入。 | 常駐巡檢與 worker。 |
-| python -m credit_scammer status | 可讀取健康檔。 | 只讀顯示最近巡檢、pending job 與錯誤。 |
-| python -m credit_scammer retry JOB_ID | run 未啟動、持有同一鎖。 | 驗證可重試狀態；pending submission 只允許核對，不清除 intent。 |
-| python -m credit_scammer reconcile JOB_ID | 未決提交與平台可讀權限。 | 只讀核對回執，必要時修正本機完成狀態。 |
-| python -m credit_scammer backup DEST | 可存取資料檔案。 | SQLite backup API 加上 immutable 任務產物，不含憑證。 |
+| python -m credit_savior auth | 本機登入設定與可見桌面。 | 可見瀏覽器完成驗證，保存狀態。 |
+| python -m credit_savior run | 課程設定、有效狀態或可恢復登入。 | 常駐巡檢與 worker。 |
+| python -m credit_savior status | 可讀取健康檔。 | 只讀顯示最近巡檢、pending job 與錯誤。 |
+| python -m credit_savior retry JOB_ID | run 未啟動、持有同一鎖。 | 驗證可重試狀態；pending submission 只允許核對，不清除 intent。 |
+| python -m credit_savior reconcile JOB_ID | 未決提交與平台可讀權限。 | 只讀核對回執，必要時修正本機完成狀態。 |
+| python -m credit_savior backup DEST | 可存取資料檔案。 | SQLite backup API 加上 immutable 任務產物，不含憑證。 |
 
 規劃 exit code：0 正常結束、10 設定錯誤、20 驗證／互動等待、30 暫時性程序故障、40 資料庫／必要產物損毀。status 在 run 執行中只讀 health.json；retry／reconcile 等會改寫狀態的命令不得與 run 同時持有資料庫所有權。
 

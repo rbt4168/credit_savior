@@ -23,6 +23,12 @@
 
 ## 已確認的平台契約
 
+正式課號從課程資訊的表格中以「課號」標籤讀取。已實測課程資訊 URL 為 `/courses/{course_id}/assignments/syllabus`，其內容可透過 GET `/api/v1/courses/{course_id}?include[]=syllabus_body` 取得。[Canvas Course 讀取契約](https://canvas.instructure.com/doc/api/courses.html)
+
+Canvas 的 `id` 是網址流水號；`course_code` 在 NTU COOL 有時等同顯示名稱，因此不作正式課號來源。讀取結果只接受明確且無衝突的表格欄位，Discord 使用該正式課號；尚無證據時顯示「課號待取得」。原 courses、jobs 與提交紀錄維持原形狀及 schema v1，另加可重入建立的 course_information 表。原版本的課程 INSERT／讀取仍相容，最近已確認的課號不因列表巡檢的空值消失。
+
+專案已改名為 Credit Savior，Python 套件 credit_savior、CLI／distribution credit-savior；Windows 工作 NTU-COOL-credit-savior。升級保留 runtime 資料與登入狀態，安裝排程會核對並停用同一 checkout 的舊工作；不同 checkout 的 legacy 工作會保留並回報。GitHub repo 使用 credit_savior。
+
 登入入口 https://cool.ntu.edu.tw/login/portal 的「以計中帳號登入」導向 adfs.ntu.edu.tw；帳密僅填入已驗證的 ADFS UsernameTextBox/PasswordTextBox。成功返回 COOL 後核對 Canvas ENV.current_user_id，保存私有狀態及 metadata。
 
 課程列表讀 /courses 的目前與過往表格；只處理學生 enrollment。作業頁是 /courses/{course_id}/assignments，不公開該導覽的課程目前略過。browser context Cookie 下的同 origin 只讀請求，沒有另存 Canvas token：
@@ -77,7 +83,7 @@ GET /api/v1/courses/{course_id}/modules/{module_id}/items?per_page=100
 - 真實全課程巡檢成功，能區分學生與助教 enrollment、建立未到期且未交的作業及影片任務；私人課程名單與任務數量不收錄於文件。
 - 真實 Codex gpt-6.1-sol JSON schema smoke 成功。
 - 真實 NTU LTI/YouTube 播放到 ended，可檢出平台末秒量化差異。
-- 47 個自動化測試通過：本機 HTTP 站真實 Chromium 提交/讀回執、提交前後斷電、unknown retry 不重送、跨連線 claim、失效 lease、版本變更、提交前截止日更新、session gate、區間合併/缺口、PDF 渲染、竄改產物、runner 阻擋、播放順序、CLI 狀態、Discord 去重/隱私/embed/冷卻、自動重接、延後重試、關閉 page/context/browser 後恢復、取消保存位置、舊頁回應不覆蓋新證據、播放器外層啟動及完成通知。
+- 62 個自動化測試通過：本機 HTTP 站真實 Chromium 提交/讀回執、提交前後斷電、unknown retry 不重送、跨連線 claim、失效 lease、版本變更、提交前截止日更新、session gate、區間合併/缺口、PDF 渲染、竄改產物、runner 阻擋、播放順序、CLI 狀態、Discord 去重/隱私/embed/冷卻、自動重接、延後重試、關閉 page/context/browser 後恢復、取消保存位置、舊頁回應不覆蓋新證據、播放器外層啟動及完成通知。
 - ruff check src tests 通過。
 - Windows 登入排程已實際安裝及啟動，heartbeat 可讀；正常停止也已驗證。
 - 真實 Discord 通知已有伺服器確認回執；未完成作業已傳課程、作業連結與缺漏原因，沒有把未提交的作業標為已提交。
@@ -111,6 +117,6 @@ GET /api/v1/courses/{course_id}/modules/{module_id}/items?per_page=100
 
 傳送用 wait=true，附件名稱與伺服器回執核對，禁用 mentions；確認後才記 notifications.json 去重。失敗保留本機並至少等待 60 秒後重試，不阻塞巡檢。網路中斷在伺服器已收到、但回應未收到的邊界可能出現重複通知；不能宣稱 exactly-once。文字遮蔽帳密、Webhook 與本機路徑；PDF/源碼附件先比雜湊並檢查是否含上述資訊，未通過不傳。答案個資不自動加上，課程與作業位置則為使用者明確要求的交付資訊。
 
-使用者指定 embed 格式：標題為「課程名稱（COOL course_id）－作業/影片/其他」，description 起首為子標題，接主要訊息、平台位置與後續事項。影片問題按課程及錯誤類型合併，至少冷卻 60 分鐘；完整影片標題與連結太長時附清單。影片 succeeded 或 played_unverified 逐支傳結果通知，明確區分「平台已確認完成」與「已播放到結束，但平台進度尚未確認」，附課程、標題、連結及核對事項；以 job_id、state 及格式版本保存送達去重，重啟不重送，後續確認完成仍可再通知。Discord 429 及成功回應的 rate-limit headers 用於節流；不把每支影片的同一錯誤逐支發送。
+使用者指定 embed 格式：標題為「課程名稱（課程資訊的正式課號）－作業/影片/其他」，description 起首為子標題，接主要訊息、平台位置與後續事項。影片問題按課程及錯誤類型合併，至少冷卻 60 分鐘；完整影片標題與連結太長時附清單。影片 succeeded 或 played_unverified 逐支傳結果通知，明確區分「平台已確認完成」與「已播放到結束，但平台進度尚未確認」，附課程、標題、連結及核對事項；以 job_id、state 及格式版本保存送達去重，重啟不重送，後續確認完成仍可再通知。Discord 429 及成功回應的 rate-limit headers 用於節流；不把每支影片的同一錯誤逐支發送。
 
 notify --resend 明確重發一次，並更新正常去重基線，防止下次常駐啟動又自動重發。模型產生但缺必要資料的部分答案，在獨立 delivery-drafts 目錄渲染供傳送；不放進 worker 的答案 manifest，避免 retry 誤用草稿直接提交。

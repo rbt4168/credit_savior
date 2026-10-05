@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import time
+from dataclasses import replace
 
 from .artifacts import write_json
 from .cool import submission_from_api, timestamp
@@ -25,6 +26,8 @@ class Scanner:
         if not course.student:
             self.store.record_course_scan(scan_id, course.course_id, "succeeded")
             return {"examined": 0, "eligible": 0}
+        code = await self.client.read_course_code(course.course_id)
+        self.store.upsert_course(replace(course, course_code=code))
         assignments = await self.client.list_assignments(course.course_id)
         eligible = 0
         for value in assignments:

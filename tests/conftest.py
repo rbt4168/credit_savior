@@ -2,9 +2,9 @@ from dataclasses import replace
 
 import pytest
 
-from credit_scammer.config import Config
-from credit_scammer.models import Assignment, Course, Submission
-from credit_scammer.store import Store
+from credit_savior.config import Config
+from credit_savior.models import Assignment, Course, Submission
+from credit_savior.store import Store
 
 
 @pytest.fixture
@@ -27,7 +27,7 @@ def assignment():
 @pytest.fixture
 def store(config, assignment):
     value = Store(config.database_path)
-    value.upsert_course(Course('1', 'Test', 'https://cool.ntu.edu.tw/courses/1'))
+    value.upsert_course(Course('1', 'Test', 'https://cool.ntu.edu.tw/courses/1', course_code='CS1001'))
     value.upsert_assignment(assignment, 'snapshots/test.json')
     yield value
     value.close()

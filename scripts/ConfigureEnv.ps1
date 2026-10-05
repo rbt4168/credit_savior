@@ -56,7 +56,7 @@ function Save-LocalSettings([hashtable]$Fields) {
 }
 
 $form = New-Object System.Windows.Forms.Form
-$form.Text = 'NTU COOL local configuration'
+$form.Text = 'Credit Savior - NTU COOL local configuration'
 $form.ClientSize = New-Object System.Drawing.Size(520, 300)
 $form.StartPosition = 'CenterScreen'
 $form.FormBorderStyle = 'FixedDialog'

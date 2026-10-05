@@ -29,7 +29,7 @@ from .discord import Notifier, problem_message
 def configure_logs(data_dir):
     log_path = data_dir / "logs" / "worker.jsonl"
     log_path.parent.mkdir(parents=True, exist_ok=True)
-    logger = logging.getLogger("credit_scammer")
+    logger = logging.getLogger("credit_savior")
     logger.setLevel(logging.INFO)
     if not logger.handlers:
         handler = RotatingFileHandler(log_path, maxBytes=10 * 1024 * 1024,
@@ -154,7 +154,7 @@ async def online(config, command, *, once=False):
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description="NTU COOL course automation")
+    parser = argparse.ArgumentParser(description="Credit Savior: NTU COOL course automation")
     parser.add_argument("--root", type=Path, default=Path.cwd())
     commands = parser.add_subparsers(dest="command", required=True)
     for name in ("auth", "scan", "status", 'stop'):

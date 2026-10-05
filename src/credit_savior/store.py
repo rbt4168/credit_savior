@@ -34,6 +34,9 @@ class Store:
             self.db.executescript("BEGIN IMMEDIATE;\n" + schema + "\nPRAGMA user_version=1;\nCOMMIT;")
         elif version != 1:
             raise WorkflowError("schema_version_unsupported")
+        # Additive extension: legacy readers/writers keep the original courses shape.
+        self.db.execute("""CREATE TABLE IF NOT EXISTS course_information (
+            course_id TEXT PRIMARY KEY REFERENCES courses(course_id), course_code TEXT NOT NULL)""")
 
     @contextmanager
     def transaction(self):
@@ -49,12 +52,17 @@ class Store:
         self.db.close()
 
     def upsert_course(self, course: Course):
-        self.db.execute(
-            """INSERT INTO courses VALUES (?,?,?,1,'accessible',?)
-            ON CONFLICT(course_id) DO UPDATE SET name=excluded.name, url=excluded.url,
-            enabled=1, access_state='accessible', last_seen_at_ms=excluded.last_seen_at_ms""",
-            (course.course_id, course.name, course.url, self.clock()),
-        )
+        with self.transaction() as db:
+            db.execute(
+                """INSERT INTO courses VALUES (?,?,?,1,'accessible',?)
+                ON CONFLICT(course_id) DO UPDATE SET name=excluded.name, url=excluded.url,
+                enabled=1, access_state='accessible', last_seen_at_ms=excluded.last_seen_at_ms""",
+                (course.course_id, course.name, course.url, self.clock()),
+            )
+            if course.course_code:
+                db.execute("""INSERT INTO course_information VALUES (?,?)
+                    ON CONFLICT(course_id) DO UPDATE SET course_code=excluded.course_code""",
+                    (course.course_id, course.course_code))
 
     def upsert_assignment(self, assignment: Assignment, payload_path: str):
         a = assignment
@@ -352,8 +360,9 @@ class Store:
             "SELECT * FROM jobs ORDER BY created_at_ms,job_id")]
 
     def subject_info(self, job):
-        row = self.db.execute("""SELECT c.name AS course_name,a.title,a.url
+        row = self.db.execute("""SELECT c.name AS course_name,i.course_code,a.title,a.url
             FROM assignments a JOIN courses c ON c.course_id=a.course_id
+            LEFT JOIN course_information i ON i.course_id=c.course_id
             WHERE a.course_id=? AND a.assignment_id=?""",
             (job['course_id'], job['subject_id'])).fetchone()
         if row is None:
@@ -363,6 +372,11 @@ class Store:
     def course_name(self, course_id):
         row = self.db.execute('SELECT name FROM courses WHERE course_id=?', (course_id,)).fetchone()
         return row['name'] if row else '課程名稱待取得'
+
+    def course_code(self, course_id):
+        row = self.db.execute('SELECT course_code FROM course_information WHERE course_id=?',
+                              (course_id,)).fetchone()
+        return row['course_code'] if row else None
 
     def backup(self, destination: Path):
         if destination.exists():

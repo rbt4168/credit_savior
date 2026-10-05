@@ -1,8 +1,8 @@
 import json
 from types import SimpleNamespace
 
-from credit_scammer.main import main, publish_health
-from credit_scammer.models import Video
+from credit_savior.main import main, publish_health
+from credit_savior.models import Video
 
 
 def test_status_reads_follow_up_snapshot_and_stop_command(config, store, assignment, capsys):

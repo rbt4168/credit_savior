@@ -4,10 +4,10 @@ from types import SimpleNamespace
 import pytest
 from playwright.async_api import Error as BrowserError
 
-from credit_scammer.artifacts import write_json
-from credit_scammer.cool import CoolClient
-from credit_scammer.models import Video
-from credit_scammer.videos import VideoWorker
+from credit_savior.artifacts import write_json
+from credit_savior.cool import CoolClient
+from credit_savior.models import Video
+from credit_savior.videos import VideoWorker
 
 
 def setup_video(config, store):

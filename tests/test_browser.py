@@ -7,12 +7,12 @@ from html import escape
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from threading import Thread
 
-from credit_scammer.artifacts import write_json
-from credit_scammer.assignments import AssignmentWorker
-from credit_scammer.browser import BrowserSession
-from credit_scammer.cool import CoolClient
-from credit_scammer.models import Answer
-from credit_scammer.models import Video
+from credit_savior.artifacts import write_json
+from credit_savior.assignments import AssignmentWorker
+from credit_savior.browser import BrowserSession
+from credit_savior.cool import CoolClient
+from credit_savior.models import Answer
+from credit_savior.models import Video
 
 
 class Handler(BaseHTTPRequestHandler):

@@ -3,9 +3,9 @@ requires = ["setuptools>=65"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "credit-scammer"
+name = "credit-savior"
 version = "0.1.0"
-description = "NTU COOL course monitoring and browser workflow automation"
+description = "Credit Savior: NTU COOL course monitoring and browser workflow automation"
 requires-python = ">=3.10"
 dependencies = [
   "playwright==1.63.0",
@@ -19,13 +19,13 @@ dependencies = [
 dev = ["pytest==9.1.1", "pytest-asyncio==1.4.0", "ruff==0.16.10"]
 
 [project.scripts]
-credit-scammer = "credit_scammer.main:main"
+credit-savior = "credit_savior.main:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-credit_scammer = ["*.sql", "*.json"]
+credit_savior = ["*.sql", "*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

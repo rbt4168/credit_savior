@@ -1,68 +1,62 @@
-# credit_scammer
+# Credit Savior
 
-NTU COOL 課程巡檢與瀏覽器工作流程。每 600 秒掃描所有已選課中的學生課程，找出未到期、尚未繳交且仍可提交的作業，使用 `gpt-6.1-sol` 產生答案。支援文字、PDF 和文字檔案；提交成功必須以平台回執確認。影片使用正常 1 倍速播放，再核對 NTU COOL 觀看紀錄。
+把 NTU COOL 的巡課、作業與影片進度交給 coding agent，完成結果直接送到 Discord。
 
-目前支援範圍、實測證據與限制見 [實作狀態](doc/system/implementation.md)。程式作業尚無隔離 runner；缺題目、缺報告主題、無法判讀的附件與未決提交會留下 `needs_input` 與待詢問事項，暫時略過。不能保證任意題型正確或取得滿分。
+**請使用 coding agent 操作這個專案。** 將本頁最後的訊息交給 Codex 或你使用的 coding agent，由它讀取安裝指南、完成設定並開始運行。你只需在本機對話框提供登入資料，以及補充作業缺少的內容。
 
-## 安裝
+## 可以幫你做什麼
 
-其他電腦部署請交給 Codex 閱讀 [Installation Guide](doc/installation-guide.md)，包含可直接貼上的部署指令、登入與模型／Discord 驗證、常駐排程、故障處理及換機還原。
+### 每 10 分鐘查看所有學生課程
 
-Windows、Python 3.10 以上，另需已安裝且登入的 Codex CLI：
+自動巡檢你在 NTU COOL 加入的學生課程，尋找還沒到期、仍可繳交且尚未提交的作業。助教身份的課程會略過；已提交或已截止的作業也會略過。保持電腦開機、登入、連網且不睡眠，就能持續檢查。
 
-```powershell
-python -m venv .venv
-.venv\Scripts\python.exe -m pip install -e ".[dev]"
-.venv\Scripts\python.exe -m playwright install chromium
-codex login
-powershell.exe -NoProfile -STA -ExecutionPolicy Bypass -File .\scripts\ConfigureEnv.ps1
+### 完成能處理的作業，交付答案與提交結果
+
+使用 **GPT-6.1-Sol** 閱讀題目、要求與支援的附件，產生文字答案、PDF 或文字檔案。答案通過檢查後自動提交，確認網站收到才回報「已提交」。遇到提交途中斷線，會先查網站上的結果，避免直接重複繳交。
+
+### 缺少資料時暫時略過，留下可以接續的事項
+
+題目不完整、報告還沒選主題，或附件目前無法處理時，會列出缺少什麼、為什麼不能完成，以及之後需要詢問的內容。有可交付的部分答案時會附上，明確標為「未提交草稿」。程式作業目前還無法自動驗證執行結果；圖片、Word 等內容也可能需要另外處理，不能保證所有題型都能完成。
+
+### 正常播放影片，斷線後自動接回
+
+以正常 1 倍速播放支援的 NTU COOL 課程影片，依網站觀看紀錄接續未看的部分。播放器失效或播放停住會自動重接；連續失敗後等待 10 分鐘再試。播放結束會再核對網站進度，分別回報「平台已確認完成」或「已播完，進度尚待確認」。如果網站的影片長度與最後一秒紀錄有差異，會保留原因供核對。
+
+### 在 Discord 看答案、提交位置與影片結果
+
+作業產物、草稿、提交結果、影片播完結果與需要處理的問題，都可以送到你指定的 Discord 頻道。每則通知包含 **課程名稱、正式課號、作業或影片標題、主要結果與網站連結**，讓你知道處理了什麼、交到哪裡。
+
+課號取自課程資訊的「課號」欄位；缺少資料時會明示待取得。同一課程的同類影片問題會合併，至少間隔一小時才再通知；已確認送達的相同結果會保存紀錄，避免一般重啟造成洗版。網路中斷時仍可能出現送達回應遺失而重複通知的情況。
+
+### 用本機對話框設定帳密
+
+由 agent 開啟你電腦上的對話框，直接詢問帳號、密碼與選填的 Discord 通知網址。密碼欄會遮蔽，資料保存在你的電腦；保存後清空欄位並關閉視窗，帳密不需要貼進聊天，也不會加入公開專案。已貼進聊天的資料仍需由本人管理，agent 無法保證刪除聊天紀錄或上下文。
+
+### 可以停止、恢復，也可以換電腦接續
+
+保留已完成的答案、待補資料、影片位置與提交紀錄，讓 agent 能在停止後接續工作。同帳號換電腦時，agent 會先停用舊電腦，再搬移工作與通知紀錄，避免兩台同時處理同一門課。電腦登入後可自動開始運行；持續運作仍需要電腦保持可用。
+
+## 複製這段訊息給你的 coding agent
+
+```text
+請幫我把 Credit Savior 在這台電腦上設定好並持續運行。
+專案：https://github.com/rbt4168/credit_savior
+
+先閱讀專案的 doc/installation-guide.md，再實際完成安裝、登入與驗證。
+請用本機對話框直接詢問我的 NTU 帳號、密碼及 Discord 通知網址，
+保存後清空欄位、關閉對話框；不要要求我把帳密貼進聊天，
+也不要把它們放入記憶、文件或公開紀錄。
+
+每 10 分鐘查看我所有學生課程，處理仍可繳交且尚未提交的作業，
+使用 GPT-6.1-Sol 產生答案；通過檢查後自動提交並確認網站收到。
+缺題目、缺主題或無法處理時先略過，把原因和之後要問的事項告訴我。
+
+正常播放支援的課程影片，斷線時自動接續，播完也要通知我。
+把答案、草稿、提交到哪門課、影片結果與問題送到我的 Discord，
+包含課程名稱、課程資訊中的正式課號、作業或影片標題與網站連結。
+平台尚未確認完成時請明確說明，不把草稿說成已交或把播完說成進度已滿。
+
+如果是從舊版本更新或換電腦，先保留現有工作與通知紀錄，
+確認同一帳號的舊電腦已停止，再接續；不要刪掉資料來排除問題。
+最後用簡單的話告訴我哪些功能已經確認可用、還有哪些需要我處理。
 ```
-
-帳密由本機對話框輸入並保存至 `.env`，密碼與 Webhook 遮蔽，不經 Codex 聊天；保存後清空欄位並關閉輸入程序。已有設定保留，留空欄位不覆蓋原值。`COOL_COURSE_IDS=all` 代表所有學生課程，助教課程會略過；也可指定逗號分隔 ID。模型固定 `LLM_MODEL=gpt-6.1-sol`，使用 Codex CLI 自己的登入，無須把 API 金鑰交給程式。[Codex 官方文件](https://developers.openai.com/codex/noninteractive)
-
-## 操作
-
-```powershell
-# 只巡檢並建立本機任務，不執行答案提交或影片播放
-.venv\Scripts\python.exe -m credit_scammer scan
-
-# 掃描一次並處理可執行的作業（會自動提交通過驗證的答案）
-.venv\Scripts\python.exe -m credit_scammer run --once
-
-# 每 10 分鐘巡檢，同時處理作業與影片
-.venv\Scripts\python.exe -m credit_scammer run
-
-# 查看健康檔與待補資料的任務
-.venv\Scripts\python.exe -m credit_scammer status
-```
-
-額外登入驗證用 `auth` 開啟可見瀏覽器。運行中的單實例鎖會阻擋另一個 `run`、`scan` 或 `auth`。先停止常駐程序，才能執行 `retry JOB_ID` 或 `backup DEST`；未決提交的 retry 只核對回執。
-
-本機 `.env` 可選填 `DISCORD_WEBHOOK_URL`。常駐程序每 15 秒查看結果，以 embed 傳送「課程名稱（課號）－類別／子標題／主要訊息」：成功提交會附答案與平台位置；無法完成時列原因與之後要詢問的事項，有草稿就附上並註明未提交。影片播放結束也逐支通知，區分平台已確認完成與已播完但平台進度尚未確認，附課程、標題、連結及待核對原因。相同結果確認後不重複傳送。影片同一課程的同類問題合併，至少冷卻 60 分鐘，長清單用附件。Webhook、帳密及本機路徑會遮蔽，檔案未通過完整性或隱私檢查時只保留本機。`notify` 可在停止常駐後補送，`notify --resend` 可明確重發一次。系統設計文件不送 Discord。
-
-```powershell
-# 登入後自動啟動，現在立即在背景執行
-.\scripts\InstallTask.ps1 -StartNow
-
-# 停止排程中的程序，資料與提交紀錄仍保留
-.\scripts\StopWorker.ps1
-```
-
-排程工作名稱為 `NTU-COOL-credit-scammer`，以目前 Windows 帳戶執行，視窗隱藏。持續運行需要保持登入、開機、連網且不進入睡眠；目前的登入觸發不等於無人登入的 Windows 服務。暫時性程序故障最多重啟三次，驗證或設定錯誤直接停止。日誌在 `data/logs/`，狀態在 `data/health.json`。
-
-影片斷線、播放器失效或停滯會在 5、15、45 秒後自動重接：優先重開影片頁，瀏覽器/context 已關閉時重建並核對登入身分，重新讀取平台觀看紀錄後從最早缺口續播。連續三次重接失敗則延後 10 分鐘自動再試，其他影片仍可繼續處理；Discord 會說明正在自動重試，維持課程/影片標題及通知冷卻。
-
-## 設計與驗證
-
-- [詳細計畫](doc/plan.md)
-- [實作、已驗證介面及限制](doc/system/implementation.md)
-- [架構](doc/system/architecture.md)、[平台整合](doc/system/platform-integration.md)、[資料模型](doc/system/data-model.md)
-- [登入](doc/system/authentication.md)、[巡檢](doc/system/scanner.md)、[作業](doc/system/assignments.md)、[影片](doc/system/videos.md)
-- [設定](doc/system/configuration.md)、[運行](doc/system/operations.md)、[測試設計](doc/system/testing.md)
-
-```powershell
-.venv\Scripts\python.exe -m pytest -q
-.venv\Scripts\ruff.exe check src tests
-```
-
-`.env`、登入 Cookie、題目、答案、SQLite 與日誌都在 Git 排除範圍內。

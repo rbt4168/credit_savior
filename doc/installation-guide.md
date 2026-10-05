@@ -1,4 +1,4 @@
-# Installation Guide：交給另一台電腦的 Codex
+# Credit Savior Installation Guide：交給另一台電腦的 Codex
 
 本指南讓新電腦上的 Codex 從 clone 到常駐啟動完成部署。以 **Windows 原生 PowerShell** 為已驗證路徑；其他作業系統需要另外整合常駐服務。依照目前程式與 [.env.example](../.env.example) 操作；完整設計文件中的未實作命令不適用。功能與限制見 [實作狀態](system/implementation.md)。
 
@@ -63,14 +63,14 @@ npm --version
 
 ## 3. 取得程式與安裝依賴
 
-專案放在可寫入的固定本機目錄，例如 `C:\codex\credit_scammer`。以下路徑是範例，可換成自己的位置。已有 checkout 時先看 `git status --short`，保留未提交變更；更新前先停止該 checkout 的常駐程序。
+專案放在可寫入的固定本機目錄，例如 `C:\codex\credit_savior`。以下路徑是範例，可換成自己的位置。已有 checkout 時先看 `git status --short`，保留未提交變更；更新前先停止該 checkout 的常駐程序。
 
 ```powershell
 New-Item -ItemType Directory -Path C:\codex -Force | Out-Null
 Set-Location C:\codex
-git clone https://github.com/rbt4168/credit_scammer.git
+git clone https://github.com/rbt4168/credit_savior.git
 if ($LASTEXITCODE -ne 0) { throw 'Clone failed.' }
-Set-Location C:\codex\credit_scammer
+Set-Location C:\codex\credit_savior
 git rev-parse --short HEAD
 
 python -m venv .venv
@@ -111,7 +111,7 @@ Codex 執行此命令後，使用者在自己電腦的 Windows 對話框填 NTU 
 | 設定 | 正式值 |
 | --- | --- |
 | COOL_BASE_URL | `https://cool.ntu.edu.tw` |
-| COOL_COURSE_IDS | `all`：所有已加入的學生課程；助教 enrollment 略過。也可填逗號分隔的數字 course ID。 |
+| COOL_COURSE_IDS | `all`：所有已加入的學生課程；助教 enrollment 略過。也可填 URL 中的數字 Canvas 內部 ID，以逗號分隔；這不是課程資訊中的正式課號。 |
 | CHECK_INTERVAL_SECONDS | `600`；目前程式拒絕其他值。 |
 | BROWSER_HEADLESS | `true`；互動 `auth` 仍會開可見瀏覽器。 |
 | LLM_MODEL | `gpt-6.1-sol`；目前程式拒絕其他模型。 |
@@ -147,7 +147,7 @@ codex login status
 ### NTU COOL 登入
 
 ```powershell
-.venv\Scripts\python.exe -m credit_scammer auth
+.venv\Scripts\python.exe -m credit_savior auth
 if ($LASTEXITCODE -ne 0) { throw 'COOL authentication not complete.' }
 ```
 
@@ -159,13 +159,13 @@ if ($LASTEXITCODE -ne 0) { throw 'COOL authentication not complete.' }
 
 ```powershell
 .venv\Scripts\python.exe -m pip check
-.venv\Scripts\python.exe -m credit_scammer --help
-.venv\Scripts\python.exe -c "from credit_scammer.solver import codex_command; codex_command(); print('Codex launcher OK')"
+.venv\Scripts\python.exe -m credit_savior --help
+.venv\Scripts\python.exe -c "from credit_savior.solver import codex_command; codex_command(); print('Codex launcher OK')"
 .venv\Scripts\python.exe -m pytest -q
 .venv\Scripts\python.exe -m ruff check src tests
 ```
 
-指南建立時的基準是 52 個測試通過、ruff 通過，包含本機設定保存、既有值保留、輸入檢查與 PowerShell→Python 的 Unicode／隱私測試。新 commit 的測試數可能改變，以該 checkout 的實際結果為準。測試使用虛構題目與本機瀏覽器 fixture；不提交真實課程作業。
+指南建立時的基準是 62 個測試通過、ruff 通過，包含本機設定保存、既有值保留、輸入檢查、PowerShell→Python 的 Unicode／隱私測試與正式課號讀取／舊資料相容性。新 commit 的測試數可能改變，以該 checkout 的實際結果為準。測試使用虛構題目與本機瀏覽器 fixture；不提交真實課程作業。
 
 以下 smoke 使用**專案實際 solver 與固定模型**，解一個虛構算式，只在暫存目錄產生答案；沒有 NTU 網路請求，也不提交作業。會使用該 Codex 帳戶的模型額度。
 
@@ -174,8 +174,8 @@ if ($LASTEXITCODE -ne 0) { throw 'COOL authentication not complete.' }
 import asyncio
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from credit_scammer.models import Assignment
-from credit_scammer.solver import CodexSolver
+from credit_savior.models import Assignment
+from credit_savior.solver import CodexSolver
 
 async def smoke():
     with TemporaryDirectory(prefix='cool-model-smoke-') as directory:
@@ -205,9 +205,9 @@ if ($LASTEXITCODE -ne 0) { throw 'Model smoke failed; do not mark solver ready.'
 先只掃描，不開始解題提交或播放：
 
 ```powershell
-.venv\Scripts\python.exe -m credit_scammer scan
+.venv\Scripts\python.exe -m credit_savior scan
 if ($LASTEXITCODE -ne 0) { throw 'Scan command failed.' }
-.venv\Scripts\python.exe -m credit_scammer status
+.venv\Scripts\python.exe -m credit_savior status
 ```
 
 掃描輸出的 `state` 應是 `succeeded`。`partial` 也可能以 0 結束，必須另讀 `errors` 與 `last_scan`；逐項處理失敗課程或容量問題，不能只看 exit code。掃描已建立本機 queued jobs，但尚未執行。
@@ -217,8 +217,8 @@ Discord 以下只發送一次不含私人資訊的安裝測試 embed。若預計
 ```powershell
 @'
 from pathlib import Path
-from credit_scammer.config import Config
-from credit_scammer.discord import DiscordTransport
+from credit_savior.config import Config
+from credit_savior.discord import DiscordTransport
 
 try:
     config = Config.load(Path.cwd())
@@ -245,7 +245,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Discord verification incomplete.' }
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\InstallTask.ps1 -StartNow
 if ($LASTEXITCODE -ne 0) { throw 'Scheduled task installation failed.' }
-Get-ScheduledTask -TaskName NTU-COOL-credit-scammer | Select-Object TaskName,State
+Get-ScheduledTask -TaskName NTU-COOL-credit-savior | Select-Object TaskName,State
 ```
 
 `-ExecutionPolicy Bypass` 僅套用這次子程序，不改整台電腦的執行原則；組織政策仍可能阻擋。安裝程式保留同名、不同 checkout 的排程並回報錯誤。每台電腦目前只支援這個固定名稱的一個安裝，不能讓多個 checkout 搶同一排程。
@@ -257,19 +257,19 @@ Get-ScheduledTask -TaskName NTU-COOL-credit-scammer | Select-Object TaskName,Sta
 需要前景診斷時，先停止排程，再執行：
 
 ```powershell
-.venv\Scripts\python.exe -m credit_scammer run
+.venv\Scripts\python.exe -m credit_savior run
 ```
 
-前景程式用 Ctrl+C 或另一個 shell 的 `python -m credit_scammer stop` 正常停止。`run --once` 只掃描並處理作業，不播放影片，也不安裝排程。不要以 `Start-Process` 隨意另起一個 worker，造成無法追蹤的背景實例。
+前景程式用 Ctrl+C 或另一個 shell 的 `python -m credit_savior stop` 正常停止。`run --once` 只掃描並處理作業，不播放影片，也不安裝排程。不要以 `Start-Process` 隨意另起一個 worker，造成無法追蹤的背景實例。
 
 ## 8. 運行驗收
 
 啟動後等候新的 health 檔，並觀察至少兩次 heartbeat（間隔約 30 秒）：
 
 ```powershell
-.venv\Scripts\python.exe -m credit_scammer status
-Get-ScheduledTask -TaskName NTU-COOL-credit-scammer | Select-Object TaskName,State
-Get-ScheduledTaskInfo -TaskName NTU-COOL-credit-scammer |
+.venv\Scripts\python.exe -m credit_savior status
+Get-ScheduledTask -TaskName NTU-COOL-credit-savior | Select-Object TaskName,State
+Get-ScheduledTaskInfo -TaskName NTU-COOL-credit-savior |
     Select-Object LastRunTime,LastTaskResult
 ```
 
@@ -301,6 +301,22 @@ Get-ScheduledTaskInfo -TaskName NTU-COOL-credit-scammer |
 | `playwright/.auth/` | 私人的登入 state 與身分 metadata。 |
 
 ## 9. 停止、更新與常見問題
+
+### 從 credit_scammer 改名版本遷移
+
+新專案名稱為 Credit Savior，Python 套件 `credit_savior`、CLI／distribution `credit-savior`，GitHub repo 為 `credit_savior`。原 checkout 目錄可保留，不需要搬動帳密、題目或答案來改名。
+
+在更新前用原版 StopWorker 停止舊程序，再 pull 新版及重新安裝依賴。新版 StopWorker 可辨識同一 checkout 的新舊排程；InstallTask 核對 ownership 後註冊 `NTU-COOL-credit-savior`，停用 `NTU-COOL-credit-scammer`，保留舊工作供回復時使用。遇到其他 checkout 的同名工作會保留並回報，不能直接強制接管。
+
+新套件安裝及 `credit-savior --help` 成功後，可移除虛擬環境中舊 distribution，清除失效的舊 CLI：
+
+```powershell
+.venv\Scripts\python.exe -m pip uninstall -y credit-scammer
+```
+
+`.env`、登入 state、SQLite、任務、提交 intent 與 Discord 去重檔沿用。正式課號另外儲存在 `course_information` 表，原 courses／jobs 表及 schema version 保留，因此舊版讀寫原課程資料仍相容。重新巡檢會從課程資訊的「課號」表格欄位取得正式課號，保留最近已確認的值；沒有證據的課程顯示「課號待取得」，不使用 Canvas 流水號或 API 顯示名稱代替。
+
+如需回到舊版本，先停止新程序並停用新排程，在原 checkout 回到使用者選定的先前版本、重新安裝其套件，再啟用舊工作。不要刪除或還原過時的提交紀錄，metadata 擴充表可留在資料庫中。
 
 正常停止排程：
 
@@ -344,11 +360,11 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\InstallTask.ps
 補送、重發與個別重試都先停止常駐：
 
 ```powershell
-.venv\Scripts\python.exe -m credit_scammer notify
+.venv\Scripts\python.exe -m credit_savior notify
 # Explicitly resend existing results once only when requested.
-.venv\Scripts\python.exe -m credit_scammer notify --resend
+.venv\Scripts\python.exe -m credit_savior notify --resend
 # Replace the placeholder with an actual job_id from local status.
-.venv\Scripts\python.exe -m credit_scammer retry JOB_ID
+.venv\Scripts\python.exe -m credit_savior retry JOB_ID
 ```
 
 目前沒有獨立 `reconcile` 命令。未決提交的 `retry` 會保留 intent 並核對回執，不能藉由刪除任務重新提交。
@@ -363,9 +379,9 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\InstallTask.ps
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\StopWorker.ps1
-Disable-ScheduledTask -TaskName NTU-COOL-credit-scammer | Out-Null
+Disable-ScheduledTask -TaskName NTU-COOL-credit-savior | Out-Null
 $migrationBackup = Join-Path 'C:\NTU-COOL-backup' (Get-Date -Format 'yyyyMMdd-HHmmss')
-.venv\Scripts\python.exe -m credit_scammer backup $migrationBackup
+.venv\Scripts\python.exe -m credit_savior backup $migrationBackup
 if ($LASTEXITCODE -ne 0) { throw 'Backup failed; do not migrate.' }
 if (Test-Path -LiteralPath data/notifications.json) {
     Copy-Item -LiteralPath data/notifications.json -Destination $migrationBackup

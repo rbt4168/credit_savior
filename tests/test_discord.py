@@ -3,10 +3,10 @@ from dataclasses import replace
 
 import pytest
 
-from credit_scammer.artifacts import write_json
-from credit_scammer.discord import DiscordTransport, Notifier, multipart
-from credit_scammer.errors import WorkflowError
-from credit_scammer.models import Answer
+from credit_savior.artifacts import write_json
+from credit_savior.discord import DiscordTransport, Notifier, multipart, item_message
+from credit_savior.errors import WorkflowError
+from credit_savior.models import Answer
 
 
 class Transport:
@@ -16,6 +16,10 @@ class Transport:
     def post(self, content, files=()):
         self.calls.append((content, files))
         return {'message_id': 'confirmed-test', 'attachment_count': len(files)}
+
+
+def test_unknown_course_code_is_labelled_pending_instead_of_canvas_id():
+    assert item_message('Test', None, '作業', 'Homework', 'Ready').startswith('Test (課號待取得)')
 
 
 async def test_missing_assignment_notified_with_course_reason_and_no_credentials(config, store, assignment):
@@ -29,6 +33,7 @@ async def test_missing_assignment_notified_with_course_reason_and_no_credentials
     assert len(transport.calls) == 1
     text = transport.calls[0][0]
     assert 'Arithmetic' in text and 'Test' in text and assignment.url in text
+    assert 'Test (CS1001) - 作業' in text
     assert 'Missing topic' in text
     assert config.username not in text and config.password not in text
     await Notifier(config, transport).poll(store)
@@ -80,7 +85,7 @@ def test_private_file_is_not_transmitted(config):
     directory.mkdir(parents=True)
     path = directory / 'report.txt'
     path.write_text(config.password, encoding='utf-8')
-    from credit_scammer.artifacts import digest
+    from credit_savior.artifacts import digest
     write_json(directory / 'manifest.json', Answer('files', files=('tasks/test/answer/report.txt',),
                hashes=(digest(path.read_bytes()),)).to_dict())
     with pytest.raises(WorkflowError, match='notification_artifact_contains_private_data'):
@@ -99,7 +104,7 @@ def test_partial_model_output_sent_as_draft_without_worker_manifest(config):
 
 
 async def test_video_errors_grouped_with_titles_courses_and_cooldown(config, store):
-    from credit_scammer.models import Video
+    from credit_savior.models import Video
     for index in range(3):
         video = Video('1', str(index+10), f'https://cool.ntu.edu.tw/courses/1/modules/items/{index}',
                       'rev', title=f'Lecture {index}')
@@ -120,7 +125,7 @@ async def test_video_errors_grouped_with_titles_courses_and_cooldown(config, sto
 
 
 async def test_deferred_video_reconnect_notification_explains_automatic_retry(config, store):
-    from credit_scammer.models import Video
+    from credit_savior.models import Video
     video = Video('1', '80', 'https://cool.ntu.edu.tw/courses/1/modules/items/80',
                   'rev', title='Lecture 80')
     store.upsert_video(video)
@@ -133,7 +138,7 @@ async def test_deferred_video_reconnect_notification_explains_automatic_retry(co
     notifier = Notifier(config, transport)
     await notifier.poll(store)
     assert len(transport.calls) == 1
-    assert 'Test (1) - 影片' in transport.calls[0][0]
+    assert 'Test (CS1001) - 影片' in transport.calls[0][0]
     assert 'Lecture 80' in transport.calls[0][0]
     assert '10 分鐘後自動再試' in transport.calls[0][0]
     await notifier.poll(store)
@@ -142,7 +147,7 @@ async def test_deferred_video_reconnect_notification_explains_automatic_retry(co
 
 @pytest.mark.parametrize('confirmed', [True, False])
 async def test_finished_video_report_has_course_title_status_and_persistent_dedup(config, store, confirmed):
-    from credit_scammer.models import Video
+    from credit_savior.models import Video
     video = Video('1', '81', 'https://cool.ntu.edu.tw/courses/1/modules/items/81',
                   'rev', title='Lecture 81')
     store.upsert_video(video)
@@ -157,7 +162,7 @@ async def test_finished_video_report_has_course_title_status_and_persistent_dedu
     await Notifier(config, transport).poll(store)
     assert len(transport.calls) == 1
     message = transport.calls[0][0]
-    assert 'Test (1) - 影片' in message and 'Lecture 81' in message and video.url in message
+    assert 'Test (CS1001) - 影片' in message and 'Lecture 81' in message and video.url in message
     assert '已播放到結束' in message
     if confirmed:
         assert '平台已確認完成' in message
@@ -169,7 +174,7 @@ async def test_finished_video_report_has_course_title_status_and_persistent_dedu
 
 
 def test_transport_uses_embed_instead_of_plain_content(monkeypatch):
-    from credit_scammer import discord
+    from credit_savior import discord
     captured = []
 
     class Response:

@@ -115,8 +115,8 @@ class RateLimited(WorkflowError):
         self.retry_after = retry_after
 
 
-def item_message(course_name, course_id, category, title, message):
-    return f'{course_name} ({course_id}) - {category}\n**{title}**\n{message}'
+def item_message(course_name, course_code, category, title, message):
+    return f'{course_name} ({course_code or "課號待取得"}) - {category}\n**{title}**\n{message}'
 
 
 def problem_message(kind, error_code):
@@ -265,7 +265,7 @@ class Notifier:
                         main = '已播放到結束，但平台進度尚未確認；尚未標記完成。'
                         notes = job['checkpoint'].get('follow_up') or ['之後核對平台觀看紀錄。']
                         main += '\n後續事項：\n' + '\n'.join('- '+note for note in notes)
-                    message = item_message(store.course_name(job['course_id']), job['course_id'],
+                    message = item_message(store.course_name(job['course_id']), store.course_code(job['course_id']),
                                            '影片', video['title'], main+'\n位置：'+video['url'])
                     await self.send([key], message)
                     continue
@@ -292,7 +292,7 @@ class Notifier:
                     self.config.data_dir, job, code)
                 main = (f"{'已提交並確認回執。' if success else '暫時略過，待補資料/處理。'}\n"
                         f"位置：{info['url']}\n")
-                message = item_message(info['course_name'], job['course_id'], '作業', info['title'], main)
+                message = item_message(info['course_name'], info['course_code'], '作業', info['title'], main)
                 if not success:
                     message += '尚未確認提交。之後要詢問/處理：\n' + '\n'.join('- '+x for x in notes)
                 try:
@@ -322,7 +322,7 @@ class Notifier:
                     continue
                 if not video.get('title'):
                     continue  # Wait for a scan to capture the actual title instead of an anonymous alert.
-                entries.append(f"課程：{store.course_name(job['course_id'])}\n"
+                entries.append(f"課程：{store.course_name(job['course_id'])} ({store.course_code(job['course_id']) or '課號待取得'})\n"
                                f"影片：{video['title']}\n位置：{video['url']}")
             if not entries:
                 continue
@@ -335,7 +335,7 @@ class Notifier:
             # The requested course/title structure remains readable inside one grouped embed.
             first_job = jobs[0]
             first_video = read_json(artifact_path(self.config.data_dir, first_job['payload_path']))
-            message = (item_message(store.course_name(first_job['course_id']), first_job['course_id'],
+            message = (item_message(store.course_name(first_job['course_id']), store.course_code(first_job['course_id']),
                         '影片', first_video.get('title') or '影片問題清單',
                         ({'browser_recovery_queued': '先前瀏覽器中斷；已排回待重試。',
                           'video_reconnect_delayed': '已自動重接三次，仍無法播放；10 分鐘後自動再試。'}

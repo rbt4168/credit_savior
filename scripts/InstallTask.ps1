@@ -6,11 +6,20 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = (Resolve-Path -LiteralPath $Root).Path
 $runnerPath = Join-Path $repoRoot 'scripts\RunWorker.ps1'
 if (-not (Test-Path -LiteralPath $runnerPath -PathType Leaf)) { throw 'RunWorker.ps1 missing.' }
-$taskName = 'NTU-COOL-credit-scammer'
+$taskName = 'NTU-COOL-credit-savior'
 $arguments = '-NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File "' + $runnerPath + '" -Root "' + $repoRoot + '"'
 $existing = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
 if ($existing -and $existing.Actions.Arguments -ne $arguments) {
     throw 'A task with this name belongs to another checkout; leaving it unchanged.'
+}
+$legacy = Get-ScheduledTask -TaskName 'NTU-COOL-credit-scammer' -ErrorAction SilentlyContinue
+if ($legacy) {
+    if ($legacy.Actions.Arguments -ne $arguments) {
+        throw 'The legacy task belongs to another checkout. Stop or migrate that installation first.'
+    }
+    if ($legacy.State -eq 'Running') {
+        throw 'Stop the legacy worker with scripts\StopWorker.ps1 before migrating the task.'
+    }
 }
 $identity = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
 $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $arguments -WorkingDirectory $repoRoot
@@ -18,5 +27,6 @@ $trigger = New-ScheduledTaskTrigger -AtLogOn -User $identity
 $principal = New-ScheduledTaskPrincipal -UserId $identity -LogonType Interactive -RunLevel Limited
 $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances IgnoreNew -StartWhenAvailable -RunOnlyIfNetworkAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
 Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null
+if ($legacy) { Disable-ScheduledTask -TaskName $legacy.TaskName | Out-Null }
 if ($StartNow) { Start-ScheduledTask -TaskName $taskName }
 Write-Output ('Installed task: ' + $taskName)

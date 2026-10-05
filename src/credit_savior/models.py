@@ -16,6 +16,7 @@ class Course:
     name: str
     url: str
     student: bool = True
+    course_code: str | None = None
 
 
 @dataclass(frozen=True)

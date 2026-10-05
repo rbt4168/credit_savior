@@ -105,7 +105,7 @@ class Store:
 ## 規劃程式配置
 
 ```text
-src/credit_scammer/
+src/credit_savior/
   config.py         # 設定解析
   browser.py        # session、gate、generation
   cool.py           # 頁面定位器與標準化擷取

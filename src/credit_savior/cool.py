@@ -56,6 +56,50 @@ class ProblemHTML(HTMLParser):
             self.text.append(data)
 
 
+class CourseInformationHTML(HTMLParser):
+    """Read the labelled course-code table, rather than a Canvas ID or short name."""
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.cells = []
+        self.cell = None
+        self.codes = set()
+        self.hidden = 0
+
+    def handle_starttag(self, tag, attrs):
+        if tag in ('script', 'style'):
+            self.hidden += 1
+        elif tag == 'tr':
+            self.cells = []
+        elif tag in ('td', 'th'):
+            self.cell = []
+        elif tag == 'br' and self.cell is not None:
+            self.cell.append(' ')
+
+    def handle_data(self, data):
+        if not self.hidden and self.cell is not None:
+            self.cell.append(data)
+
+    def handle_endtag(self, tag):
+        if tag in ('script', 'style'):
+            self.hidden = max(0, self.hidden - 1)
+        elif tag in ('td', 'th') and self.cell is not None:
+            self.cells.append(re.sub(r'\s+', ' ', ''.join(self.cell)).strip())
+            self.cell = None
+        elif tag == 'tr':
+            for index, label in enumerate(self.cells[:-1]):
+                if re.fullmatch(r'(?:課號|課程代碼|course\s+code)\s*[:：]?', label, re.I):
+                    value = self.cells[index + 1]
+                    if value and len(value) <= 128 and value.lower() not in {'-', '--', 'n/a', '無', '未提供'}:
+                        self.codes.add(value)
+
+
+def course_code_from_information(html: str) -> str | None:
+    parser = CourseInformationHTML()
+    parser.feed(html)
+    return next(iter(parser.codes)) if len(parser.codes) == 1 else None
+
+
 def submission_from_api(value) -> Submission:
     if not isinstance(value, dict):
         return Submission()
@@ -156,6 +200,14 @@ class CoolClient:
                 next_link = re.search(r'<([^>]+)>;\s*rel="next"', links)
                 path = next_link[1] if next_link else None
         return result
+
+    async def read_course_code(self, course_id: str) -> str | None:
+        async with self.session.operation(self.role):
+            value, _ = await self._json(f'/api/v1/courses/{course_id}?include[]=syllabus_body')
+            if not isinstance(value, dict) or str(value.get('id')) != course_id:
+                raise WorkflowError('course_information_unverified')
+            body = value.get('syllabus_body')
+            return course_code_from_information(body) if isinstance(body, str) else None
 
     async def read_submission(self, course_id: str, assignment_id: str) -> Submission:
         async with self.session.operation(self.role):
