@@ -91,6 +91,28 @@ Windows solver 會由 PATH 找到 `codex`，再執行相鄰的 `node_modules/@op
 
 不必 activate 虛擬環境，直接使用以上完整路徑。若 PowerShell 擋住 npm/codex 的 `.ps1` shim，可先用 `npm.cmd`／`codex.cmd`；專案 Python solver 直接呼叫 Node launcher。
 
+### 英文作業與 LaTeX 排版
+
+先讀取根目錄的 `AGENTS.md` 與 `preferences.json`。目前偏好是英文答案、LaTeX PDF、不主動加入參考或定義來源章節；作業明確要求的語言或引用方式仍優先。可編輯的 `.tex` 原始檔留在本機產物旁，不會自動當成提交附件。
+
+PDF 排版需要 Tectonic。可使用 PATH 上的 `tectonic`，或安裝已驗證的 Windows 0.17.0 至 `data/tools/tectonic-0.17.0/tectonic.exe`。以下檔案都留在 Git 忽略的 `data` 目錄：
+
+```powershell
+$latexToolDir = Join-Path (Get-Location).Path 'data\tools\tectonic-0.17.0'
+New-Item -ItemType Directory -Path $latexToolDir -Force | Out-Null
+$latexArchive = Join-Path $latexToolDir 'tectonic.zip'
+Invoke-WebRequest -Uri 'https://github.com/tectonic-typesetting/tectonic/releases/download/tectonic%400.17.0/tectonic-0.17.0-x86_64-pc-windows-msvc.zip' -OutFile $latexArchive
+$latexExpectedHash = 'f61ce51f0b0ade1015b7de7ef368541c5424e9756ecbd0d7af97d6d48030845f'
+if ((Get-FileHash -LiteralPath $latexArchive -Algorithm SHA256).Hash.ToLowerInvariant() -ne $latexExpectedHash) { throw 'Tectonic archive digest mismatch.' }
+Expand-Archive -LiteralPath $latexArchive -DestinationPath $latexToolDir -Force
+& (Join-Path $latexToolDir 'tectonic.exe') --version
+if ($LASTEXITCODE -ne 0) { throw 'Tectonic installation failed.' }
+```
+
+第一次編譯會下載字型與 LaTeX 套件，請以不含個資的簡單英文公式文件完成一次編譯，確認 PDF 可開啟，再啟動常駐流程。程式以 `--untrusted` 關閉 Tectonic 已知的不安全功能，拒絕常見的外部檔案讀寫指令，且不將 COOL 密碼或 API 金鑰環境變數傳給編譯器；這些措施不等於完整檔案系統隔離。[Tectonic 編譯選項](https://tectonic-typesetting.github.io/book/latest/v2cli/compile.html)
+
+遇到 `latex_not_installed`、`latex_compile_failed` 或 `latex_compile_timeout`，先處理安裝、編譯紀錄或下載問題，保留草稿與原因；不能把失敗的文件當成已完成 PDF。舊版純文字草稿仍可讀取，不會因此重新提交已交的作業。
+
 ## 4. 本機設定與登入
 
 ### 用本機對話框設定帳號、密碼

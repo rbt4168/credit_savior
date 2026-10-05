@@ -13,7 +13,7 @@
 | CoolClient | Canvas GET、附件快照、文字/檔案提交表單、NTU LTI 與跨 iframe HTML5/YouTube 播放。 | cool.py |
 | Store | SQLite WAL、schema v1、唯一 job、120 秒 lease/30 秒續租、原子提交 intent、崩潰恢復、核對優先。 | store.py、schema.sql |
 | Scanner | 即刻開始、monotonic 600 秒時間格、480 秒 budget、學生角色篩選、精確 due/unlock/lock、版本去重。 | scanner.py |
-| Solver | Codex CLI gpt-6.1-sol、JSON schema、最多三次請求、180 秒 timeout、文字/CJK PDF/源碼產物。 | solver.py |
+| Solver | Codex CLI gpt-6.1-sol、JSON schema、最多三次請求、180 秒 timeout、文字、LaTeX PDF、舊 CJK 草稿及源碼產物。 | solver.py |
 | Validator | 非空、格式、大小、SHA-256、PDF 可讀性；程式題因 runner 未提供而停止提交。 | validation.py |
 | AssignmentWorker | 點擊前重讀、gate → submission lock、prepared → dispatching → confirmed/uncertain、文字與下載檔案雜湊回執。 | assignments.py |
 | VideoWorker | 平台已看區間、最早缺漏前 5 秒續播、30 秒 checkpoint、60 秒停滯、5/15/45 秒重接、失敗延後 10 分鐘自動再試、平台確認。 | videos.py、progress.py |
@@ -53,6 +53,10 @@ GET /api/v1/courses/{course_id}/modules/{module_id}/items?per_page=100
 
 答案 manifest 保存模型、路徑、雜湊；timeout/cancel 終止子程序樹。報告主題、個資、實驗數據與引用不能捏造；必交源碼須獨立檔案。格式驗證不保證解答正確。缺資料時 model-response.json 保存缺漏，job 留 needs_input，註記之後要詢問，不反覆解題。
 
+作業偏好存於根目錄 `preferences.json`，預設英文、LaTeX PDF、不主動加入參考來源章節；作業明確要求仍優先。Solver 將偏好放進模型提示，再以 Tectonic 編譯完整 LaTeX 文件，保留同名 `.tex` 與編譯紀錄。提交 manifest 只列指定的 PDF 與程式附件，不會額外提交排版原始檔。舊純文字 PDF 草稿沿用既有轉換方式。
+
+編譯器使用 PATH 的 Tectonic 或本機 `data/tools/tectonic-0.17.0/tectonic.exe`，啟用 `--untrusted`，不繼承課程帳密環境變數，並拒絕常見檔案存取指令。這不是完整隔離環境。安裝缺漏、編譯失敗及逾時以明確錯誤保留待處理狀態，不假定 PDF 已產生。
+
 ## 提交與恢復
 
 寫入採 browser assignment 表單，不直接呼叫 submission POST。文字用 TinyMCE 或 textarea；檔案用 file input，額外檔案須匹配新增控制項；無匹配則停止。先持久化 dispatching intent，再點一次提交。
@@ -83,7 +87,7 @@ GET /api/v1/courses/{course_id}/modules/{module_id}/items?per_page=100
 - 真實全課程巡檢成功，能區分學生與助教 enrollment、建立未到期且未交的作業及影片任務；私人課程名單與任務數量不收錄於文件。
 - 真實 Codex gpt-6.1-sol JSON schema smoke 成功。
 - 真實 NTU LTI/YouTube 播放到 ended，可檢出平台末秒量化差異。
-- 62 個自動化測試通過：本機 HTTP 站真實 Chromium 提交/讀回執、提交前後斷電、unknown retry 不重送、跨連線 claim、失效 lease、版本變更、提交前截止日更新、session gate、區間合併/缺口、PDF 渲染、竄改產物、runner 阻擋、播放順序、CLI 狀態、Discord 去重/隱私/embed/冷卻、自動重接、延後重試、關閉 page/context/browser 後恢復、取消保存位置、舊頁回應不覆蓋新證據、播放器外層啟動及完成通知。
+- 68 個自動化測試通過：本機 HTTP 站真實 Chromium 提交/讀回執、提交前後斷電、unknown retry 不重送、跨連線 claim、失效 lease、版本變更、提交前截止日更新、session gate、區間合併/缺口、PDF 渲染、竄改產物、runner 阻擋、播放順序、CLI 狀態、Discord 去重/隱私/embed/冷卻、自動重接、延後重試、關閉 page/context/browser 後恢復、取消保存位置、舊頁回應不覆蓋新證據、播放器外層啟動及完成通知、作業偏好、LaTeX 原始檔保留與常見外部讀寫指令拒絕。
 - ruff check src tests 通過。
 - Windows 登入排程已實際安裝及啟動，heartbeat 可讀；正常停止也已驗證。
 - 真實 Discord 通知已有伺服器確認回執；未完成作業已傳課程、作業連結與缺漏原因，沒有把未提交的作業標為已提交。
@@ -97,7 +101,7 @@ GET /api/v1/courses/{course_id}/modules/{module_id}/items?per_page=100
 | 能力 | 目前行為／完成觸發條件 |
 | --- | --- |
 | 隔離程式 runner | 產生源碼後留 runner_unavailable；需固定 runtime、無網路隔離及題目測試。 |
-| 圖片、Word/LaTeX | 留不支援原因；需視覺或文書處理。 |
+| 圖片、Word/LaTeX 題目附件 | 留不支援原因；需視覺或文書處理。 |
 | 報告主題、未附完整題目 | 暫時略過，註記之後詢問，補資料後 retry。 |
 | 非 modules 影片、其他 LTI | 未提供 adapter。 |
 | 平台末秒誤差 | 保存缺口，不宣稱 100%。 |
