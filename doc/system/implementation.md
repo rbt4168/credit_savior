@@ -9,14 +9,14 @@
 | 模組 | 已實作行為 | 程式 |
 | --- | --- | --- |
 | Config | dotenv 與環境優先序、欄位錯誤不輸出值、NTU origin、ID 或 all、模型固定 6.1-Sol、路徑防逃逸。 | config.py |
-| BrowserSession | Chromium、NTU ADFS 登入、Cookie/IndexedDB 原子保存、身分核對、角色頁面、reader/writer gate、提交互斥。 | browser.py |
+| BrowserSession | Chromium、NTU ADFS 登入、Cookie/IndexedDB 原子保存、身分核對、角色頁面、reader/writer gate、提交互斥、影片頁及 browser/context/driver 重接。 | browser.py |
 | CoolClient | Canvas GET、附件快照、文字/檔案提交表單、NTU LTI 與跨 iframe HTML5/YouTube 播放。 | cool.py |
 | Store | SQLite WAL、schema v1、唯一 job、120 秒 lease/30 秒續租、原子提交 intent、崩潰恢復、核對優先。 | store.py、schema.sql |
 | Scanner | 即刻開始、monotonic 600 秒時間格、480 秒 budget、學生角色篩選、精確 due/unlock/lock、版本去重。 | scanner.py |
 | Solver | Codex CLI gpt-6.1-sol、JSON schema、最多三次請求、180 秒 timeout、文字/CJK PDF/源碼產物。 | solver.py |
 | Validator | 非空、格式、大小、SHA-256、PDF 可讀性；程式題因 runner 未提供而停止提交。 | validation.py |
 | AssignmentWorker | 點擊前重讀、gate → submission lock、prepared → dispatching → confirmed/uncertain、文字與下載檔案雜湊回執。 | assignments.py |
-| VideoWorker | 平台已看區間、最早缺漏前 5 秒起正常播放、30 秒 checkpoint、60 秒停滯、有限重開、平台確認。 | videos.py、progress.py |
+| VideoWorker | 平台已看區間、最早缺漏前 5 秒續播、30 秒 checkpoint、60 秒停滯、5/15/45 秒重接、失敗延後 10 分鐘自動再試、平台確認。 | videos.py、progress.py |
 | CLI/Supervisor | auth、scan、run、run --once、status、retry、backup、OS 鎖、健康檔、JSONL 輪替、例外去敏感。 | main.py、workers.py |
 | Windows | 隱藏視窗、登入時啟動、同名工作所有權检查、暫時故障最多三次重啟。 | scripts/*.ps1 |
 | Discord | 答案附件、提交課程及位置、未完成原因與待詢問事項；15 秒檢查、持久化去重、wait=true 確認、憑證遮蔽。 | discord.py |
@@ -77,10 +77,12 @@ GET /api/v1/courses/{course_id}/modules/{module_id}/items?per_page=100
 - 真實全課程巡檢成功，能區分學生與助教 enrollment、建立未到期且未交的作業及影片任務；私人課程名單與任務數量不收錄於文件。
 - 真實 Codex gpt-6.1-sol JSON schema smoke 成功。
 - 真實 NTU LTI/YouTube 播放到 ended，可檢出平台末秒量化差異。
-- 34 個自動化測試通過：本機 HTTP 站真實 Chromium 提交/讀回執、提交前後斷電、unknown retry 不重送、跨連線 claim、失效 lease、版本變更、提交前截止日更新、session gate、區間合併/缺口、PDF 渲染、竄改產物、runner 阻擋、播放順序、CLI 狀態、Discord 去重/隱私/embed/冷卻及瀏覽器關閉不耗盡佇列。
+- 47 個自動化測試通過：本機 HTTP 站真實 Chromium 提交/讀回執、提交前後斷電、unknown retry 不重送、跨連線 claim、失效 lease、版本變更、提交前截止日更新、session gate、區間合併/缺口、PDF 渲染、竄改產物、runner 阻擋、播放順序、CLI 狀態、Discord 去重/隱私/embed/冷卻、自動重接、延後重試、關閉 page/context/browser 後恢復、取消保存位置、舊頁回應不覆蓋新證據、播放器外層啟動及完成通知。
 - ruff check src tests 通過。
 - Windows 登入排程已實際安裝及啟動，heartbeat 可讀；正常停止也已驗證。
 - 真實 Discord 通知已有伺服器確認回執；未完成作業已傳課程、作業連結與缺漏原因，沒有把未提交的作業標為已提交。
+- 真實 NTU COOL 瀏覽器關閉後，已重建 Chromium、重用本機登入狀態並核對相同身分，課程讀取恢復；輸出不含帳戶資料。
+- 真實 NTU LTI/YouTube 播放中關閉 Chromium 後，重接並重讀觀看紀錄，恢復至最早缺口前 5 秒；採樣位置由約 1420 秒正常前進至 1422 秒。未初始化的播放器先點外層 Play Video，等待媒體 metadata 載入再續播，避免載入與 play 請求互相中斷。
 
 測試站使用虛構帳戶；真實課程頁面、憑證與答案不進 Git。真實作業提交、各種上傳控制項與 24 小時 soak 仍需個別證據。
 
@@ -95,7 +97,7 @@ GET /api/v1/courses/{course_id}/modules/{module_id}/items?per_page=100
 | 平台末秒誤差 | 保存缺口，不宣稱 100%。 |
 | 24×7 | 有常駐及登入啟動；需持續開機、登入、連網、不睡眠；尚未做 24 小時 soak。 |
 | 無人登入 Windows service | 目前是 AtLogOn/Interactive 工作。 |
-| Browser 原地重建 | 尚未完成；TargetClosedError 停止程序並有限重啟，保留其餘佇列；其他控制項錯誤暫略過。 |
+| 無法恢復的影片服務 | 影片可自動重接；連續失敗後延後 10 分鐘繼續嘗試。需要互動登入、來源變更或已播放但進度無法確認時，仍保留具體待處理原因。 |
 | reconcile CLI | 使用 retry 保留核對語意，沒有獨立指令。 |
 | status 告警 | 有 stale/blocked_jobs；完整 degraded/容量告警仍待做。 |
 
@@ -109,6 +111,6 @@ GET /api/v1/courses/{course_id}/modules/{module_id}/items?per_page=100
 
 傳送用 wait=true，附件名稱與伺服器回執核對，禁用 mentions；確認後才記 notifications.json 去重。失敗保留本機並至少等待 60 秒後重試，不阻塞巡檢。網路中斷在伺服器已收到、但回應未收到的邊界可能出現重複通知；不能宣稱 exactly-once。文字遮蔽帳密、Webhook 與本機路徑；PDF/源碼附件先比雜湊並檢查是否含上述資訊，未通過不傳。答案個資不自動加上，課程與作業位置則為使用者明確要求的交付資訊。
 
-使用者指定 embed 格式：標題為「課程名稱（COOL course_id）－作業/影片/其他」，description 起首為子標題，接主要訊息、平台位置與後續事項。影片按課程及錯誤類型合併，至少冷卻 60 分鐘；完整影片標題與連結太長時附清單。Discord 429 及成功回應的 rate-limit headers 用於節流；不把每支影片的同一錯誤逐支發送。
+使用者指定 embed 格式：標題為「課程名稱（COOL course_id）－作業/影片/其他」，description 起首為子標題，接主要訊息、平台位置與後續事項。影片問題按課程及錯誤類型合併，至少冷卻 60 分鐘；完整影片標題與連結太長時附清單。影片 succeeded 或 played_unverified 逐支傳結果通知，明確區分「平台已確認完成」與「已播放到結束，但平台進度尚未確認」，附課程、標題、連結及核對事項；以 job_id、state 及格式版本保存送達去重，重啟不重送，後續確認完成仍可再通知。Discord 429 及成功回應的 rate-limit headers 用於節流；不把每支影片的同一錯誤逐支發送。
 
 notify --resend 明確重發一次，並更新正常去重基線，防止下次常駐啟動又自動重發。模型產生但缺必要資料的部分答案，在獨立 delivery-drafts 目錄渲染供傳送；不放進 worker 的答案 manifest，避免 retry 誤用草稿直接提交。

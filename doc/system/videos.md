@@ -2,6 +2,8 @@
 
 本文件保留完整設計目標。目前程式、已驗證介面與未完成項目請以 [實作狀態](implementation.md) 為準。
 
+目前的斷線恢復已實作：page/iframe 控制失效或 60 秒播放停滯時，5/15/45 秒後重接，重開影片頁或重建 browser/context/driver。登入 gate 保護其他角色頁面；同 generation 下重開影片頁不影響正在編輯的作業。重新讀取平台紀錄後由最早缺口前 5 秒續播；失敗三次後存 retry_wait，600 秒後自動再試。取消及斷線都保存最新觀察位置；來源變更與平台未確認完成仍維持原有判定。
+
 [實作計畫](../plan.md) · [資料模型](data-model.md) · [平台整合](platform-integration.md)
 
 ## 目標與完成證據
@@ -51,10 +53,14 @@ opening 先查平台進度：complete 直接成功；incomplete 且有 covered_r
 每 10 秒讀取 position_s、paused、buffering、ended 並續租。播放位置 60 秒未前進且非 ended 時判定 stall；buffering 不會永久豁免 stall 判定。
 
 1. 若 paused，使用正常 play 控制恢復。
-2. 下一個 stall 仍未恢復，重開該影片頁，從 checkpoint 續播。
-3. 重開頁面最多三次，按 5、15、45 秒延後；計數保存於 checkpoint，重啟不重置。
-4. 額度用盡標記 failed/playback_stalled，繼續下一部影片。
+2. 60 秒未前進，重開該影片頁，重讀平台紀錄後從最早缺口前 5 秒續播。
+3. 每輪重接最多三次，按 5、15、45 秒延後；保存當輪次數與累計次數，累計值不因重啟重置。
+4. 當輪額度用盡存 retry_wait/video_reconnect_delayed，600 秒後自動再試，期間繼續下一部影片。
 5. context 重建不是觀看完成；取得新 generation 後仍須重讀平台與播放位置。
+
+未初始化的 YouTube/video.js 先使用播放器正常 Play 按鈕載入媒體，等待 loadedmetadata，再設定續播位置並以 1 倍速播放；避免外層覆蓋與新 load request 使 play 請求失效。
+
+每支影片完成或播放到 ended 但平台尚未確認時，Discord 發送課程、課號、影片標題及平台連結，明確區分兩種結果。通知保存確認回執，常駐重啟不重複發送；播放到 ended 不宣稱平台已完成。
 
 固定 30 秒保存最後正常觀察位置；正常關閉、暫停與錯誤恢復前再保存一次。可接受的中斷重播範圍為最後 checkpoint 起最多 30 秒，加上續播重疊 5 秒。
 

@@ -1,5 +1,6 @@
 import asyncio
 import json
+import pytest
 from contextlib import asynccontextmanager
 from dataclasses import replace
 from html import escape
@@ -11,6 +12,7 @@ from credit_scammer.assignments import AssignmentWorker
 from credit_scammer.browser import BrowserSession
 from credit_scammer.cool import CoolClient
 from credit_scammer.models import Answer
+from credit_scammer.models import Video
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -31,7 +33,8 @@ class Handler(BaseHTTPRequestHandler):
             value = {**self.server.assignment, 'submission': self.server.submission}
             self.reply(json.dumps(value).encode())
         else:
-            self.reply(b'''<div id="assignment_show"><button type="button">Submit Assignment</button></div>
+            self.reply(b'''<script>window.ENV={current_user_id:410};</script>
+            <div id="assignment_show"><button type="button">Submit Assignment</button></div>
             <textarea id="submission_body"></textarea><button id="submit_file_button">Submit</button>
             <script>document.querySelector('#submit_file_button').onclick=async()=>{
               await fetch('/submit',{method:'POST',body:JSON.stringify({text:document.querySelector('#submission_body').value})});
@@ -94,6 +97,40 @@ async def test_real_browser_submission_form_and_receipt(config, store):
             await session.close()
 
 
+async def test_uninitialized_embed_uses_outer_play_control_before_media_play(config):
+    from playwright.async_api import async_playwright
+    session = BrowserSession(config)
+    session.playwright = await async_playwright().start()
+    session.browser = await session.playwright.chromium.launch(headless=True)
+    await session._create_context()
+    session.state = 'ready'
+    # A local fixture served by routing: no real YouTube or COOL request is made.
+    html = '''<video></video><button>Play Video</button><script>
+        const v=document.querySelector('video'); let ready=false;
+        Object.defineProperties(v, {
+          readyState:{get:()=>ready?1:0}, currentSrc:{get:()=>ready?'fixture':''},
+          duration:{get:()=>30}});
+        v.play=()=>ready?Promise.resolve():Promise.reject(new Error('source not loaded'));
+        document.querySelector('button').onclick=()=>{
+          window.clicked=true;
+          setTimeout(()=>{ready=true;v.dispatchEvent(new Event('loadedmetadata'))},20);
+        };
+    </script>'''
+    try:
+        await session.context.route('https://cool-video.dlc.ntu.edu.tw/fixture',
+                                    lambda route: route.fulfill(body=html, content_type='text/html'))
+        async with session.operation('video') as page:
+            await page.goto('https://cool-video.dlc.ntu.edu.tw/fixture')
+        client = CoolClient(session, 'video')
+        video = Video('1', '70', 'url', 'rev')
+        client.current_video, client.video_metadata = video, {'id': 70}
+        await client.open_video(video, 12)
+        assert await page.evaluate('window.clicked')
+        assert await page.locator('video').evaluate('v=>v.currentTime') == 12
+    finally:
+        await session.close()
+
+
 async def test_nested_operation_with_waiting_auth_writer(config):
     session = BrowserSession(config)
     session.context, session.state = object(), 'ready'
@@ -120,3 +157,51 @@ async def test_nested_operation_with_waiting_auth_writer(config):
             deadline.cancel()
     await task
     assert entered.is_set()
+
+
+@pytest.mark.parametrize('broken', ['page', 'context', 'browser'])
+async def test_real_browser_reconnect_restores_role_and_saved_identity(config, broken):
+    from playwright.async_api import async_playwright
+    async with server() as (_, base):
+        session = BrowserSession(replace(config, base_url=base))
+        session.playwright = await async_playwright().start()
+        session.browser = await session.playwright.chromium.launch(headless=True)
+        await session._create_context()
+        session.state = 'ready'
+
+        async def identity(page):
+            return await page.evaluate('() => window.ENV?.current_user_id || null')
+        session._identity = identity
+        try:
+            async with session.operation('assignment') as assignment_page:
+                await assignment_page.goto(base)
+                await assignment_page.locator('#submission_body').fill('Staged answer')
+            async with session.operation('video') as video_page:
+                await video_page.goto(base)
+            await session._save_state(410)
+            generation = session.generation
+            if broken == 'page':
+                await video_page.close()
+            elif broken == 'context':
+                await session.context.close()
+            else:
+                await session.browser.close()
+            await session.reconnect('video', expected_generation=generation)
+            assert session.browser.is_connected() and session.state == 'ready'
+            if broken == 'page':
+                assert not assignment_page.is_closed()
+                assert await assignment_page.locator('#submission_body').input_value() == 'Staged answer'
+                assert session.generation == generation
+            else:
+                assert session.generation > generation
+                assert session.account_id == '410'
+                context = session.context
+                # A late error from the old generation must not close the replacement.
+                await session.reconnect('video', expected_generation=generation)
+                assert session.context is context
+            async with session.operation('video') as restored:
+                assert restored is not video_page
+                await restored.goto(base)
+                assert await restored.locator('#submission_body').count() == 1
+        finally:
+            await session.close()

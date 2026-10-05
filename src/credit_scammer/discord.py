@@ -238,14 +238,37 @@ class Notifier:
         for job in store.list_jobs():
             recovered = (resend and job['kind'] == 'video' and job['state'] == 'queued'
                          and job['checkpoint'].get('error_class') == 'TargetClosedError')
-            if job['state'] not in ('needs_input', 'failed', 'succeeded') and not recovered:
-                continue
-            if job['state'] == 'succeeded' and job['kind'] != 'assignment':
+            delayed = job['kind'] == 'video' and job['state'] == 'retry_wait' and job['checkpoint'].get('reconnect_exhausted')
+            if job['state'] not in ('needs_input', 'failed', 'succeeded') and not recovered and not delayed:
                 continue
             kind, code = job['kind'], job['error_code'] or 'unspecified'
             if recovered:
                 code = 'browser_recovery_queued'
             if kind == 'video':
+                finished = job['state'] == 'succeeded' or (
+                    job['state'] == 'needs_input' and job['phase'] == 'played_unverified')
+                if finished:
+                    key = {'job_id': job['job_id'], 'state': job['state'],
+                           'delivery_format': 'video-completion-v1'}
+                    if resend_token:
+                        key['manual_resend'] = resend_token
+                    if canonical_hash(key) in self.state['delivered']:
+                        continue
+                    video = read_json(artifact_path(self.config.data_dir, job['payload_path']))
+                    if not video.get('title'):
+                        continue
+                    if job['state'] == 'succeeded':
+                        main = ('已播放到結束，平台已確認完成。' if
+                                job['checkpoint'].get('last_position_s') is not None else
+                                '平台觀看紀錄已確認完成。')
+                    else:
+                        main = '已播放到結束，但平台進度尚未確認；尚未標記完成。'
+                        notes = job['checkpoint'].get('follow_up') or ['之後核對平台觀看紀錄。']
+                        main += '\n後續事項：\n' + '\n'.join('- '+note for note in notes)
+                    message = item_message(store.course_name(job['course_id']), job['course_id'],
+                                           '影片', video['title'], main+'\n位置：'+video['url'])
+                    await self.send([key], message)
+                    continue
                 video_problems.setdefault((job['course_id'], code), []).append(job)
                 continue
             key = {'job_id': job['job_id'], 'state': job['state'], 'error_code': code,
@@ -314,8 +337,9 @@ class Notifier:
             first_video = read_json(artifact_path(self.config.data_dir, first_job['payload_path']))
             message = (item_message(store.course_name(first_job['course_id']), first_job['course_id'],
                         '影片', first_video.get('title') or '影片問題清單',
-                        ('先前瀏覽器中斷；已排回待重試。' if code == 'browser_recovery_queued'
-                         else '影片處理暫時略過。')+'問題類型：'+code) + '\n\n' + preview +
+                        ({'browser_recovery_queued': '先前瀏覽器中斷；已排回待重試。',
+                          'video_reconnect_delayed': '已自動重接三次，仍無法播放；10 分鐘後自動再試。'}
+                         .get(code, '影片處理暫時略過。'))+'問題類型：'+code) + '\n\n' + preview +
                        '\n\n同類問題合併通知；至少冷卻 60 分鐘，不逐支洗版。')
             key = {'video_summary': code, 'course_id': course_id, 'hour': now_ms() // 3600_000}
             if resend_token:

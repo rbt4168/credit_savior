@@ -119,6 +119,55 @@ async def test_video_errors_grouped_with_titles_courses_and_cooldown(config, sto
     assert len(transport.calls) == 1
 
 
+async def test_deferred_video_reconnect_notification_explains_automatic_retry(config, store):
+    from credit_scammer.models import Video
+    video = Video('1', '80', 'https://cool.ntu.edu.tw/courses/1/modules/items/80',
+                  'rev', title='Lecture 80')
+    store.upsert_video(video)
+    write_json(config.data_dir / 'videos/80.json', video.to_dict())
+    job_id = store.enqueue('video', '1', '80', 'rev', 'videos/80.json')
+    store.claim('video', 'owner')
+    store.update(job_id, 'owner', state='retry_wait', error_code='video_reconnect_delayed',
+                 retry_after_ms=store.clock()+600000, checkpoint={'reconnect_exhausted': True})
+    transport = Transport()
+    notifier = Notifier(config, transport)
+    await notifier.poll(store)
+    assert len(transport.calls) == 1
+    assert 'Test (1) - 影片' in transport.calls[0][0]
+    assert 'Lecture 80' in transport.calls[0][0]
+    assert '10 分鐘後自動再試' in transport.calls[0][0]
+    await notifier.poll(store)
+    assert len(transport.calls) == 1
+
+
+@pytest.mark.parametrize('confirmed', [True, False])
+async def test_finished_video_report_has_course_title_status_and_persistent_dedup(config, store, confirmed):
+    from credit_scammer.models import Video
+    video = Video('1', '81', 'https://cool.ntu.edu.tw/courses/1/modules/items/81',
+                  'rev', title='Lecture 81')
+    store.upsert_video(video)
+    write_json(config.data_dir / 'videos/81.json', video.to_dict())
+    job_id = store.enqueue('video', '1', '81', 'rev', 'videos/81.json')
+    store.claim('video', 'owner')
+    store.update(job_id, 'owner', state='succeeded' if confirmed else 'needs_input',
+                 phase='completed' if confirmed else 'played_unverified',
+                 error_code=None if confirmed else 'progress_unavailable',
+                 checkpoint={'last_position_s': 30, 'follow_up': ['Check final-second gap.']})
+    transport = Transport()
+    await Notifier(config, transport).poll(store)
+    assert len(transport.calls) == 1
+    message = transport.calls[0][0]
+    assert 'Test (1) - 影片' in message and 'Lecture 81' in message and video.url in message
+    assert '已播放到結束' in message
+    if confirmed:
+        assert '平台已確認完成' in message
+    else:
+        assert '平台進度尚未確認' in message and 'Check final-second gap' in message
+        assert '平台已確認完成' not in message
+    await Notifier(config, transport).poll(store)
+    assert len(transport.calls) == 1
+
+
 def test_transport_uses_embed_instead_of_plain_content(monkeypatch):
     from credit_scammer import discord
     captured = []

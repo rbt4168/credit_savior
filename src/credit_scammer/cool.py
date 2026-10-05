@@ -354,19 +354,24 @@ class CoolClient:
                         player_kind='ntu-cool-lti', order=len(videos), title=item.get('title') or ''))
             return list(videos.values())
 
-    async def _capture_video_response(self, response):
+    async def _capture_video_response(self, response, source_page):
+        if source_page is not self.video_page:
+            return
+        selected_video = self.current_video
         parsed = urlsplit(response.url)
         if (parsed.hostname != 'cool-video.dlc.ntu.edu.tw' or response.status != 200
                 or not re.fullmatch(r'/api/users/current|/api/courses/\d+/videos/\d+/view|'
                     r'/api/courses/\d+/course-videos/\d+/viewing-records/summaries', parsed.path)):
             return
         try:
-            self.video_cache[parsed.path] = await response.json()
+            value = await response.json()
+            if source_page is self.video_page and self.current_video == selected_video:
+                self.video_cache[parsed.path] = value
         except Exception:
             pass
 
-    def _video_response(self, response):
-        task = asyncio.create_task(self._capture_video_response(response))
+    def _video_response(self, response, source_page):
+        task = asyncio.create_task(self._capture_video_response(response, source_page))
         self.video_tasks.add(task)
         task.add_done_callback(self.video_tasks.discard)
 
@@ -383,7 +388,7 @@ class CoolClient:
     async def inspect_video(self, video: Video):
         async with self.session.operation(self.role) as page:
             if self.video_page is not page:
-                page.on('response', self._video_response)
+                page.on('response', lambda response: self._video_response(response, page))
                 self.video_page = page
             self.video_cache.clear()
             self.current_video = video
@@ -416,11 +421,31 @@ class CoolClient:
             locator = await self._video_element(page)
             if locator is None:
                 raise WorkflowError('video_player_unavailable', transient=True)
+            if await locator.evaluate('v=>v.readyState === 0 && !v.currentSrc'):
+                # Video.js can cover the YouTube iframe with its own Play overlay.
+                # Start through that control so the player loads a media source.
+                started = False
+                for frame in page.frames:
+                    if urlsplit(frame.url).hostname == 'cool-video.dlc.ntu.edu.tw':
+                        play = frame.get_by_role('button', name='Play Video', exact=True)
+                        if await play.count() == 1 and await play.is_visible():
+                            await play.click()
+                            started = True
+                            break
+                if not started:
+                    for frame in page.frames:
+                        if urlsplit(frame.url).hostname not in {'www.youtube.com', 'www.youtube-nocookie.com'}:
+                            continue
+                        if await frame.locator('video').count() != 1:
+                            continue
+                        play = frame.get_by_role('button', name=re.compile(
+                            r'^(Play video|播放影片|播放视频)$', re.I))
+                        if await play.count() == 1 and await play.is_visible():
+                            await play.click()
+                        break
             await locator.evaluate("""async (v, position) => {
                 v.muted=true;
                 v.playbackRate=1;
-                await Promise.race([v.play(), new Promise((_,reject)=>
-                    setTimeout(()=>reject(new Error('play timeout')),30000))]);
                 if (v.readyState < 1) await new Promise((resolve,reject)=>{
                     v.addEventListener('loadedmetadata', resolve, {once:true});
                     setTimeout(()=>reject(new Error('metadata timeout')), 30000);
@@ -428,7 +453,8 @@ class CoolClient:
                 v.currentTime=Math.max(0, Math.min(position,v.duration||0));
                 v.playbackRate=1;
                 v.muted=true;
-                await v.play();
+                await Promise.race([v.play(), new Promise((_,reject)=>
+                    setTimeout(()=>reject(new Error('play timeout')),30000))]);
             }""", position_s)
 
     async def playback(self):

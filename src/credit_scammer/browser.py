@@ -4,10 +4,11 @@ import asyncio
 import json
 import re
 from contextlib import asynccontextmanager
+from contextlib import suppress
 from contextvars import ContextVar
 from urllib.parse import urlsplit
 
-from playwright.async_api import async_playwright
+from playwright.async_api import Error as BrowserError, async_playwright
 
 from .artifacts import digest, read_json, write_json
 from .config import Config
@@ -186,6 +187,51 @@ class BrowserSession:
     async def recover(self):
         self.state = "expired"
         await self.ensure_ready()
+
+    async def reconnect(self, role: str, *, expected_generation: int):
+        """Repair one role's page; restore the authenticated context if it is gone."""
+        async with self.auth_lock, self.gate.write():
+            if (self.state == 'ready' and self.generation != expected_generation
+                    and self.browser and self.browser.is_connected()):
+                return self.generation  # Another recovery already replaced this context.
+            if self.state == 'ready' and self.browser and self.browser.is_connected():
+                try:
+                    page = await self.context.new_page()
+                    old = self.pages.get(role)
+                    self.pages[role] = page
+                    if old and not old.is_closed():
+                        with suppress(BrowserError, asyncio.TimeoutError):
+                            await asyncio.wait_for(old.close(), 5)
+                    return self.generation
+                except BrowserError:
+                    pass  # A connected browser can still have a closed context.
+            self.state = 'reconnecting'
+            if self.browser:
+                with suppress(BrowserError, asyncio.TimeoutError):
+                    await asyncio.wait_for(self.browser.close(), 5)
+            self.context = None
+            self.pages.clear()
+            try:
+                try:
+                    self.browser = await self.playwright.chromium.launch(
+                        headless=False if self.interactive else self.config.headless)
+                except BrowserError:
+                    # Rebuild the driver too when the transport, rather than Chromium, died.
+                    with suppress(BrowserError, asyncio.TimeoutError):
+                        await asyncio.wait_for(self.playwright.stop(), 5)
+                    self.playwright = await async_playwright().start()
+                    self.browser = await self.playwright.chromium.launch(
+                        headless=False if self.interactive else self.config.headless)
+                if not await self._load_and_check():
+                    await self._login()
+                self.state = 'ready'
+                return self.generation
+            except WorkflowError as error:
+                self.state = 'interactive_required' if error.code == 'interactive_required' else 'failed'
+                raise
+            except Exception:
+                self.state = 'failed'
+                raise WorkflowError('browser_reconnect_failed', transient=True) from None
 
     @asynccontextmanager
     async def operation(self, role: str):

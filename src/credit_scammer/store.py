@@ -293,6 +293,15 @@ class Store:
                 WHERE kind='video' AND state='failed' AND error_code='worker_unexpected_error'
                 AND json_extract(checkpoint_json,'$.error_class')='TargetClosedError'""",
                 (self.clock(),))
+            db.execute("""UPDATE jobs SET state='queued',error_code=NULL,retry_after_ms=NULL,
+                updated_at_ms=? WHERE kind='video' AND state IN ('failed','needs_input')
+                AND (error_code IN ('browser_action_unavailable','playback_stalled',
+                    'video_player_unavailable','browser_closed','duration_unknown')
+                    OR (error_code='worker_unexpected_error' AND
+                        (json_extract(checkpoint_json,'$.error_class') IN
+                            ('Error','TimeoutError','TargetClosedError')
+                        OR json_extract(checkpoint_json,'$.error_class') IS NULL)))""",
+                (self.clock(),))
 
     def retry(self, job_id: str):
         job = self.get(job_id)
