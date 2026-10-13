@@ -28,14 +28,16 @@ class Scanner:
             return {"examined": 0, "eligible": 0}
         code = await self.client.read_course_code(course.course_id)
         self.store.upsert_course(replace(course, course_code=code))
+        from .notebooks import refresh_source
+        await asyncio.to_thread(refresh_source, self.data_dir, course.course_id)
         assignments = await self.client.list_assignments(course.course_id)
         eligible = 0
         for value in assignments:
             aid = str(value["id"])
             self.store.schedule_reconciliation(course.course_id, aid)
             observed = submission_from_api(value.get("submission"))
-            due, lock = timestamp(value.get("due_at")), timestamp(value.get("lock_at"))
-            if observed.presence == "present" or (due is not None and due <= now_ms()) or (
+            lock = timestamp(value.get("lock_at"))
+            if observed.presence == "present" or value.get('locked_for_user') is True or (
                     lock is not None and lock <= now_ms()):
                 self.store.cancel_subject(course.course_id, aid, 'ineligible')
                 continue

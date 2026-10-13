@@ -58,11 +58,12 @@ class Assignment:
     attachments: tuple[Attachment, ...] = ()
     submission: Submission = field(default_factory=Submission)
     unsupported: str | None = None
+    locked_for_user: bool | None = None
 
     @property
     def content_hash(self) -> str:
         value = asdict(self)
-        for key in ("url", "submission", "unsupported"):
+        for key in ("url", "submission", "unsupported", "locked_for_user"):
             value.pop(key)
         for attachment in value["attachments"]:
             attachment.pop("path")
@@ -75,7 +76,10 @@ class Assignment:
             return "already_submitted"
         if self.submission.presence != "absent":
             return "submission_state_unknown"
-        if self.due_at_ms is not None and at_ms >= self.due_at_ms:
+        if self.locked_for_user is True:
+            return 'assignment_closed'
+        if (self.due_at_ms is not None and at_ms >= self.due_at_ms
+                and self.locked_for_user is not False):
             return "assignment_expired"
         if self.lock_at_ms is not None and at_ms >= self.lock_at_ms:
             return "assignment_closed"

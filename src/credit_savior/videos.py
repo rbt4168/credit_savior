@@ -85,7 +85,7 @@ class VideoWorker:
             return
         gaps = self.client.missing_video_ranges()
         if gaps is None:
-            raise WorkflowError('progress_unavailable')
+            raise WorkflowError('progress_unavailable', transient=True)
         # Resume from platform evidence, including gaps earlier than a saved player position.
         position = max(0, gaps[0][0] - 5)
         await self.client.open_video(video, position)
@@ -119,10 +119,11 @@ class VideoWorker:
             if progress == "complete":
                 self.store.update(job["job_id"], owner, phase="completed", state="succeeded")
                 return
-        checkpoint['follow_up'] = ['之後核對影片平台觀看紀錄、末秒缺口與播放器長度差異。']
-        self.store.update(job["job_id"], owner, phase="played_unverified", state="needs_input",
+        checkpoint['follow_up'] = ['10 分鐘後自動重讀平台觀看紀錄；若仍有缺口，正常續播補看，不假定完成。']
+        self.store.update(job["job_id"], owner, phase="played_unverified", state="retry_wait",
                           checkpoint=checkpoint,
-                          error_code="progress_unavailable")
+                          error_code="progress_unavailable",
+                          retry_after_ms=self.store.clock() + int(self.retry_s * 1000))
 
     def save_evidence(self, job):
         if hasattr(self.client, 'video_evidence'):

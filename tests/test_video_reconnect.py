@@ -112,7 +112,9 @@ def test_startup_requeues_old_player_errors_but_preserves_unverified_completion(
     store.update(job_id, 'owner', phase='played_unverified', state='needs_input',
                  error_code='progress_unavailable')
     store.recover()
-    assert store.get(job_id)['state'] == 'needs_input'
+    assert store.get(job_id)['state'] == 'retry_wait'
+    assert store.get(job_id)['phase'] == 'played_unverified'
+    assert store.claim('video', 'recheck')['job_id'] == job_id
 
 
 async def test_closed_page_response_cannot_replace_reconnected_video_evidence(config):
@@ -138,3 +140,22 @@ async def test_closed_page_response_cannot_replace_reconnected_video_evidence(co
     resume.set()
     await task
     assert client.video_cache['/api/users/current'] == {'id': 410}
+
+
+async def test_progress_refresh_reopens_site_instead_of_reusing_tab_cache(config):
+    client = CoolClient(SimpleNamespace(config=config), role='video')
+    video = Video('1', '70', 'url', 'rev')
+    client.current_video = video
+    client.video_metadata = {'id': 80, 'length': 30}
+    client.video_cache = {'/api/users/current': {'id': 410},
+        '/api/courses/1/course-videos/80/viewing-records/summaries': []}
+    assert await client.video_progress() == 'incomplete'
+
+    async def reopen(v):
+        assert v == video
+        client.video_cache['/api/courses/1/course-videos/80/viewing-records/summaries'] = [
+            {'userId': 410, 'courseId': 1, 'courseVideoId': 80,
+             'records': [{'start': 0, 'end': 30}]}]
+
+    client.inspect_video = reopen
+    assert await client.video_progress(refresh=True) == 'complete'

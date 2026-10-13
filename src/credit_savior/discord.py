@@ -239,20 +239,28 @@ class Notifier:
             recovered = (resend and job['kind'] == 'video' and job['state'] == 'queued'
                          and job['checkpoint'].get('error_class') == 'TargetClosedError')
             delayed = job['kind'] == 'video' and job['state'] == 'retry_wait' and job['checkpoint'].get('reconnect_exhausted')
-            if job['state'] not in ('needs_input', 'failed', 'succeeded') and not recovered and not delayed:
+            verification_wait = (job['kind'] == 'video' and job['state'] == 'retry_wait'
+                                 and job['phase'] == 'played_unverified')
+            if job['state'] not in ('needs_input', 'failed', 'succeeded') and not recovered and not delayed and not verification_wait:
                 continue
             kind, code = job['kind'], job['error_code'] or 'unspecified'
             if recovered:
                 code = 'browser_recovery_queued'
             if kind == 'video':
                 finished = job['state'] == 'succeeded' or (
-                    job['state'] == 'needs_input' and job['phase'] == 'played_unverified')
+                    job['state'] in ('needs_input', 'retry_wait') and job['phase'] == 'played_unverified')
                 if finished:
                     key = {'job_id': job['job_id'], 'state': job['state'],
                            'delivery_format': 'video-completion-v1'}
                     if resend_token:
                         key['manual_resend'] = resend_token
                     if canonical_hash(key) in self.state['delivered']:
+                        continue
+                    legacy = {**key, 'state': 'needs_input'}
+                    if (verification_wait and not resend_token
+                            and canonical_hash(legacy) in self.state['delivered']):
+                        # Recovering old unverified jobs must not repeat all their
+                        # earlier completion reports. Confirmed completion still sends.
                         continue
                     video = read_json(artifact_path(self.config.data_dir, job['payload_path']))
                     if not video.get('title'):

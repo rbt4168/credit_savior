@@ -120,9 +120,15 @@ class Store:
                               (course_id, subject_id)).fetchone():
                 raise ValueError("subject_missing")
             existing = db.execute(
-                "SELECT job_id FROM jobs WHERE kind=? AND course_id=? AND subject_id=? AND revision=?",
+                "SELECT job_id,state,error_code FROM jobs WHERE kind=? AND course_id=? AND subject_id=? AND revision=?",
                 (kind, course_id, subject_id, revision)).fetchone()
             if existing:
+                if (kind == 'assignment' and state == 'queued' and existing['state'] == 'cancelled'
+                        and existing['error_code'] in {'ineligible', 'assignment_expired', 'assignment_closed'}
+                        and not self.pending(course_id, subject_id)):
+                    db.execute("""UPDATE jobs SET state='queued',phase='discovered',error_code=NULL,
+                        lease_owner=NULL,lease_until_ms=NULL,retry_after_ms=NULL,updated_at_ms=?
+                        WHERE job_id=?""", (self.clock(), existing['job_id']))
                 return existing["job_id"]
             job_id = str(uuid4())
             db.execute(
@@ -310,6 +316,9 @@ class Store:
                             ('Error','TimeoutError','TargetClosedError')
                         OR json_extract(checkpoint_json,'$.error_class') IS NULL)))""",
                 (self.clock(),))
+            db.execute("""UPDATE jobs SET state='retry_wait',retry_after_ms=?,updated_at_ms=?
+                WHERE kind='video' AND state='needs_input' AND phase='played_unverified'
+                AND error_code='progress_unavailable'""", (self.clock(), self.clock()))
 
     def retry(self, job_id: str):
         job = self.get(job_id)

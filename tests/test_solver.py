@@ -42,10 +42,13 @@ async def test_homework_preferences_reach_model_prompt(config, assignment, monke
     from credit_savior.artifacts import write_json
     write_json(config.data_dir.parent / 'preferences.json', {'homework': {
         'language': 'English', 'pdf_format': 'LaTeX', 'include_reference_section': False}})
+    write_json(config.data_dir / 'course-sources/sources.json', {'courses': {'1': {
+        'repository': 'https://github.com/example/ExampleCourse', 'model': 'gpt-6-astra'}}})
     output = config.data_dir / 'tasks/preference-test/answer'
     captured = {}
 
     async def launch(*args, **kwargs):
+        captured['args'] = args
         async def communicate(prompt):
             captured['prompt'] = prompt.decode('utf-8')
             write_json(output / 'model-response.json', {
@@ -55,10 +58,12 @@ async def test_homework_preferences_reach_model_prompt(config, assignment, monke
 
     monkeypatch.setattr(module, 'codex_command', lambda: ['unused-codex'])
     monkeypatch.setattr(module.asyncio, 'create_subprocess_exec', launch)
-    await CodexSolver(config.data_dir).solve(assignment, output)
+    answer = await CodexSolver(config.data_dir).solve(assignment, output)
     assert 'Write the answer in English by default' in captured['prompt']
     assert 'complete, self-contained LaTeX document' in captured['prompt']
     assert 'Do not add a references or sources section' in captured['prompt']
+    assert captured['args'][captured['args'].index('--model') + 1] == 'gpt-6-astra'
+    assert answer.model == 'gpt-6-astra'
 
 
 def test_latex_compilation_retains_source_and_excludes_credentials(config, monkeypatch):

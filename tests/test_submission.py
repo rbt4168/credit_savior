@@ -122,6 +122,10 @@ def test_receipt_requires_bytes_and_recent_submission():
     assert not matches_receipt(observed, answer, attempt)
     assert matches_receipt(replace(observed, file_hashes=('correct',)), answer, attempt)
     assert not matches_receipt(replace(observed, file_hashes=('correct',), submitted_at_ms=1), answer, attempt)
+    assert matches_receipt(replace(observed, files=('1791818108_489__answer.pdf',),
+                                   file_hashes=('correct',)), answer, attempt)
+    assert not matches_receipt(replace(observed, files=('1791818108_489__other.pdf',),
+                                       file_hashes=('correct',)), answer, attempt)
 
 
 async def test_ended_video_without_platform_confirmation_is_not_success(config, store):
@@ -151,5 +155,7 @@ async def test_ended_video_without_platform_confirmation_is_not_success(config, 
     client.config = SimpleNamespace(data_dir=config.data_dir)
     worker = VideoWorker(client, store, progress_delays=())
     await worker.process(store.claim('video', 'owner'), 'owner')
-    assert store.get(job_id)['state'] == 'needs_input'
+    assert store.get(job_id)['state'] == 'retry_wait'
     assert store.get(job_id)['phase'] == 'played_unverified'
+    assert store.get(job_id)['error_code'] == 'progress_unavailable'
+    assert store.claim('video', 'early') is None

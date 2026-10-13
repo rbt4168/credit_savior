@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 from dataclasses import asdict
 from pathlib import Path
 
@@ -23,9 +24,12 @@ def matches_receipt(observation, answer, attempt):
         return False
     if answer.kind == 'text':
         return observation.text is not None and receipt_text(observation.text) == ' '.join(answer.text.split())
-    return (len(observation.files) == len(answer.files) == len(observation.file_hashes)
-            and sorted(zip(observation.files, observation.file_hashes))
-            == sorted(zip((Path(p).name for p in answer.files), answer.hashes)))
+    if len(observation.files) != len(answer.files) or len(observation.file_hashes) != len(answer.files):
+        return False
+    # Canvas adds a numeric upload timestamp to otherwise identical filenames.
+    files = [(re.sub(r'^\d+(?:_\d+)?__', '', name), value)
+             for name, value in zip(observation.files, observation.file_hashes)]
+    return sorted(files) == sorted(zip((Path(p).name for p in answer.files), answer.hashes))
 
 
 class AssignmentWorker:

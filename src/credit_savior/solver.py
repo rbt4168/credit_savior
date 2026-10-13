@@ -180,6 +180,9 @@ class CodexSolver:
             text = await asyncio.to_thread(extract_material, path)
             materials.append({"name": attachment.name, "text": text})
         preferences = homework_preferences(self.data_dir)
+        from .notebooks import course_source
+        profile = course_source(self.data_dir, assignment.course_id)
+        model = profile['model'] if profile else self.model
         problem = {
             "title": assignment.title, "prompt": assignment.prompt, "rubric": assignment.rubric,
             "submission_types": assignment.submission_types,
@@ -195,7 +198,10 @@ class CodexSolver:
             f"Write the answer in {preferences['language']} by default; follow an explicitly "
             "required assignment language if there is one. "
             "Return only the requested JSON. If required information is missing, list it in "
-            "missing_information instead of guessing. Prefer text for online_text_entry; "
+            "missing_information instead of guessing. Missing optional bonus questions must "
+            "not prevent completing the required questions; state any omitted bonus clearly. "
+            "Do not claim code was executed, measured or plotted unless supplied verified results "
+            "establish that. Prefer text for online_text_entry; "
             "Do not invent a report topic when the material contains only report format "
             "requirements. Do not fabricate personal data, observations, experimental "
             "results, or references. If code must be submitted, include a separate code "
@@ -215,7 +221,7 @@ class CodexSolver:
         result_path = output_dir / "model-response.json"
         schema_path = Path(__file__).with_name("answer-schema.json")
         args = codex_command() + [
-            "exec", "--model", self.model, "--sandbox", "read-only",
+            "exec", "--model", model, "--sandbox", "read-only",
             "--skip-git-repo-check", "--ephemeral", "--ignore-user-config", "--ignore-rules",
             "--json", "--color", "never", "--output-schema", str(schema_path),
             "--output-last-message", str(result_path),
@@ -237,7 +243,8 @@ class CodexSolver:
             **({"creationflags": 0x08000000} if os.name == "nt" else {"start_new_session": True}),
         )
         try:
-            await asyncio.wait_for(process.communicate(prompt.encode("utf-8")), self.timeout_s)
+            await asyncio.wait_for(process.communicate(prompt.encode("utf-8")),
+                                   max(self.timeout_s, 600) if model == 'gpt-6-astra' else self.timeout_s)
         except asyncio.TimeoutError:
             await stop_process(process)
             raise WorkflowError("model_timeout", transient=True) from None
@@ -252,16 +259,16 @@ class CodexSolver:
             raise WorkflowError("model_response_invalid") from None
         if response.get("missing_information"):
             raise WorkflowError("missing_problem_material")
-        return await asyncio.to_thread(self.render, response, output_dir)
+        return await asyncio.to_thread(self.render, response, output_dir, model=model)
 
-    def render(self, response: dict, output_dir: Path) -> Answer:
+    def render(self, response: dict, output_dir: Path, *, model=None) -> Answer:
         kind = response.get("answer_kind")
         if kind == "text":
             text = response.get("answer_text")
             if not isinstance(text, str) or not text.strip():
                 raise WorkflowError("empty_answer")
             atomic_write(output_dir / "answer.txt", text.encode("utf-8"))
-            answer = Answer("text", text=text, model=self.model)
+            answer = Answer("text", text=text, model=model or self.model)
         elif kind == "files":
             items = response.get("artifacts")
             if not isinstance(items, list) or not items or len(items) > 10:
@@ -280,7 +287,7 @@ class CodexSolver:
                     atomic_write(target, text.encode("utf-8"))
                 files.append(str(target.relative_to(self.data_dir)))
                 hashes.append(digest(target.read_bytes()))
-            answer = Answer("files", files=tuple(files), hashes=tuple(hashes), model=self.model)
+            answer = Answer("files", files=tuple(files), hashes=tuple(hashes), model=model or self.model)
         else:
             raise WorkflowError("model_response_invalid")
         write_json(output_dir / "manifest.json", answer.to_dict())

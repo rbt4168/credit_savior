@@ -75,7 +75,7 @@ GET /api/v1/courses/{course_id}/modules/{module_id}/items?per_page=100
 /api/courses/{course_id}/course-videos/{course_video_id}/viewing-records/summaries
 ```
 
-只讀當前影片使用者的 records，合併 start/end 區間，計算 [0,length] 補集；由最早缺口正常 1 倍速播放，不 POST 觀看紀錄。ended 不等於 complete。播完透過正常「觀看紀錄」tab 刷新；仍有缺口或讀不到時留 played_unverified。證據存 tasks/{job_id}/video-evidence.json。
+只讀當前影片使用者的 records，合併 start/end 區間，計算 [0,length] 補集；由最早缺口正常 1 倍速播放，不 POST 觀看紀錄。ended 不等於 complete。核對時重新載入正常影片頁面，取得新的平台摘要，避免切換 tab 沿用舊快取；仍有缺口或讀不到時留 played_unverified，10 分鐘後自動核對並播放實際缺口。證據存 tasks/{job_id}/video-evidence.json。
 
 真實 YouTube 實測：播放器 1425.641 秒，平台 length=1426，records 到 1425，completionRate 約 99.93%；播到 ended 仍差最後一秒。系統記錄差異，不改成 complete。
 
@@ -95,6 +95,18 @@ GET /api/v1/courses/{course_id}/modules/{module_id}/items?per_page=100
 - 真實 NTU LTI/YouTube 播放中關閉 Chromium 後，重接並重讀觀看紀錄，恢復至最早缺口前 5 秒；採樣位置由約 1420 秒正常前進至 1422 秒。未初始化的播放器先點外層 Play Video，等待媒體 metadata 載入再續播，避免載入與 play 請求互相中斷。
 
 測試站使用虛構帳戶；真實課程頁面、憑證與答案不進 Git。真實作業提交、各種上傳控制項與 24 小時 soak 仍需個別證據。
+
+## 2026-10-13 運作修復
+
+常駐程序由 `scripts/supervise_worker.py` 管理，子程序輸出直接寫入本機 `data/logs/worker-console.log`，避免 PowerShell 把一般 stderr 警告當成終止錯誤。啟動寬限 180 秒，heartbeat 超過 120 秒未更新時只終止自己啟動的程序樹；意外退出按 15、60、300 秒重啟。正常停止不重啟，設定或登入不足則等待處理。Windows 工作排程另外設定每分鐘重試、最多三次，處理監護程序本身退出。事件記在 `data/logs/supervisor.jsonl`。
+
+平台明確回傳 `locked_for_user=false` 的未交作業，即使超過 due_at 仍可處理；實際 lock_at、解鎖時間與其他提交限制仍須通過。未知開放狀態不推定可逾期提交。只恢復因截止判定取消、沒有待核對提交的任務，不重新提交完成任務。
+
+公開 GitHub notebook 題目可按本機課程設定更新乾淨 checkout；只讀 JSON，不執行 notebook。星期一或五作業選用日期之前、七天內的課程 notebook 及相應作業區段；找不到或題目含不支援圖片時保留待處理原因，不挪用舊週題目。預設模型沿用 gpt-6.1-sol，指定課程可用 gpt-6-astra，後者保留至少 600 秒解題時間。來源設定與對應課程只留在 ignored data 目錄。
+
+回執允許平台附加的數字時間戳檔名前綴，但仍核對原檔名、附件數量及實際下載檔案 SHA-256。產物名稱由 JSON schema 限制為可用的邏輯名稱。缺少加分題不阻擋資料齊全的必答題；需要執行程式的必答題仍遵守 runner 驗證。
+
+既有 played_unverified 任務會改為自動延後重試，保留原始證據；曾通知的未確認結果不因遷移重發，後續平台確認完成仍發新通知。78 項測試通過，包含真實子程序意外退出、stderr 警告、heartbeat 卡住、正常停止、來源選題、開放的逾期作業、檔名回執、刷新觀看摘要與通知去重；實際 gpt-6-astra 呼叫亦已通過。24 小時持續運作仍需後續觀察。
 
 ## 尚未完成
 

@@ -316,7 +316,7 @@ class CoolClient:
         rubric = "\n".join(
             f"{criterion.get('description', '')}: {criterion.get('long_description', '')}"
             for criterion in value.get("rubric", []))
-        return Assignment(
+        assignment = Assignment(
             course_id, assignment_id, self.checked_url(f"/courses/{course_id}/assignments/{assignment_id}"),
             value["name"], ("".join(parser.text).strip() +
                             ('\n\nReferenced URLs:\n' + '\n'.join(parser.links) if parser.links else '')),
@@ -325,7 +325,10 @@ class CoolClient:
             timestamp(value.get("due_at")), timestamp(value.get("unlock_at")),
             timestamp(value.get("lock_at")), rubric, tuple(attachments),
             submission_from_api(value.get("submission")), unsupported,
+            locked_for_user=value.get('locked_for_user'),
         )
+        from .notebooks import enrich_assignment
+        return enrich_assignment(self.config.data_dir, assignment)
 
     async def stage_answer(self, assignment: Assignment, answer: Answer):
         if self.role != "assignment":
@@ -546,27 +549,9 @@ class CoolClient:
 
     async def video_progress(self, *, refresh=False):
         if refresh and self.current_video and self.video_metadata:
-            # Use the site's normal viewing-records tab; retain the player so its
-            # own heartbeat/ended handler can finish saving records.
-            async with self.session.operation(self.role) as page:
-                path = (f'/api/courses/{self.current_video.course_id}/course-videos/'
-                        f'{self.video_metadata["id"]}/viewing-records/summaries')
-                for frame in page.frames:
-                    if urlsplit(frame.url).hostname != 'cool-video.dlc.ntu.edu.tw':
-                        continue
-                    tab = frame.get_by_role('tab', name=re.compile(r'觀看紀錄|Viewing Records', re.I))
-                    if await tab.count() != 1:
-                        continue
-                    other = frame.get_by_role('tab', name=re.compile(r'^留言$|^Comments$', re.I))
-                    if await other.count() == 1:
-                        await other.click()
-                    self.video_cache.pop(path, None)
-                    await tab.click()
-                    for _ in range(20):
-                        if path in self.video_cache:
-                            break
-                        await asyncio.sleep(.25)
-                    break
+            # Reopening the normal page forces a fresh platform summary. Tab
+            # switches may reuse the frontend's pre-playback cached response.
+            await self.inspect_video(self.current_video)
         gaps = self.missing_video_ranges()
         return 'unknown' if gaps is None else ('incomplete' if gaps else 'complete')
 

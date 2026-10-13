@@ -18,6 +18,28 @@ class Transport:
         return {'message_id': 'confirmed-test', 'attachment_count': len(files)}
 
 
+async def test_recovering_unverified_video_does_not_repeat_but_confirmation_sends(config, store):
+    from credit_savior.models import Video
+    video = Video('1', '7', 'url', 'revision', title='A video')
+    store.upsert_video(video)
+    write_json(config.data_dir / 'videos/test.json', video.to_dict())
+    job_id = store.enqueue('video', '1', '7', 'revision', 'videos/test.json')
+    store.claim('video', 'owner')
+    store.update(job_id, 'owner', phase='played_unverified', state='needs_input',
+                 error_code='progress_unavailable', checkpoint={'last_position_s': 30})
+    transport = Transport()
+    notifier = Notifier(config, transport)
+    await notifier.poll(store)
+    assert len(transport.calls) == 1
+    store.recover()
+    await notifier.poll(store)
+    assert len(transport.calls) == 1
+    store.claim('video', 'recheck')
+    store.update(job_id, 'recheck', phase='completed', state='succeeded')
+    await notifier.poll(store)
+    assert len(transport.calls) == 2
+
+
 def test_unknown_course_code_is_labelled_pending_instead_of_canvas_id():
     assert item_message('Test', None, '作業', 'Homework', 'Ready').startswith('Test (課號待取得)')
 

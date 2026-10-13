@@ -4,6 +4,7 @@ import argparse
 import asyncio
 import json
 import logging
+import os
 import shutil
 import signal
 from logging.handlers import RotatingFileHandler
@@ -84,6 +85,8 @@ async def online(config, command, *, once=False):
         notifier = Notifier(config)
         tasks = []
         try:
+            if command == 'run' and os.environ.get('CREDIT_SAVIOR_SUPERVISED') != '1':
+                (config.data_dir / 'stop.request').unlink(missing_ok=True)
             store.recover()
             await session.start()
             emit(logger, "session_ready")
@@ -98,7 +101,6 @@ async def online(config, command, *, once=False):
                 return result
             owner = str(uuid4())
             stop = asyncio.Event()
-            (config.data_dir / 'stop.request').unlink(missing_ok=True)
             loop = asyncio.get_running_loop()
             for sig in (signal.SIGINT, signal.SIGTERM):
                 try:

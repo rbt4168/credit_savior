@@ -3,19 +3,10 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = (Resolve-Path -LiteralPath $Root).Path
 $pythonPath = Join-Path $repoRoot '.venv\Scripts\python.exe'
 if (-not (Test-Path -LiteralPath $pythonPath -PathType Leaf)) {
-    throw 'Virtual environment missing. Follow README installation instructions.'
+    throw 'Virtual environment missing. Follow doc/installation-guide.md.'
 }
 Set-Location -LiteralPath $repoRoot
-$retryDelays = @(15, 60, 300)
-$retryCount = 0
-$logDirectory = Join-Path $repoRoot 'data\logs'
-New-Item -ItemType Directory -Path $logDirectory -Force | Out-Null
-$consolePath = Join-Path $logDirectory 'supervisor.log'
-while ($true) {
-    # Credentials are loaded by Python, never interpolated into process arguments.
-    & $pythonPath -m credit_savior --root $repoRoot run >> $consolePath 2>&1
-    $workerCode = $LASTEXITCODE
-    if ($workerCode -ne 30 -or $retryCount -ge $retryDelays.Count) { exit $workerCode }
-    Start-Sleep -Seconds $retryDelays[$retryCount]
-    $retryCount++
-}
+# Python owns child output and restart policy. Native stderr must not become a
+# terminating PowerShell error under ErrorActionPreference=Stop.
+& $pythonPath (Join-Path $repoRoot 'scripts\supervise_worker.py') --root $repoRoot
+exit $LASTEXITCODE
