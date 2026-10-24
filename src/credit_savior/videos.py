@@ -81,11 +81,15 @@ class VideoWorker:
         await self.client.inspect_video(video)
         self.save_evidence(job)
         if await self.client.video_progress() == 'complete':
-            self.store.update(job['job_id'], owner, phase='completed', state='succeeded')
+            self.store.complete_video(job['job_id'], owner)
             return
         gaps = self.client.missing_video_ranges()
         if gaps is None:
-            raise WorkflowError('progress_unavailable', transient=True)
+            checkpoint['follow_up'] = ['平台觀看摘要無法讀取，10 分鐘後重查；未確認前不重播整支影片。']
+            self.store.update(job['job_id'], owner, phase='opening', state='retry_wait',
+                checkpoint=checkpoint, error_code='progress_unavailable',
+                retry_after_ms=self.store.clock() + int(self.retry_s * 1000))
+            return
         # Resume from platform evidence, including gaps earlier than a saved player position.
         position = max(0, gaps[0][0] - 5)
         await self.client.open_video(video, position)
@@ -117,7 +121,7 @@ class VideoWorker:
             progress = await self.client.video_progress(refresh=bool(delay))
             self.save_evidence(job)
             if progress == "complete":
-                self.store.update(job["job_id"], owner, phase="completed", state="succeeded")
+                self.store.complete_video(job['job_id'], owner)
                 return
         checkpoint['follow_up'] = ['10 分鐘後自動重讀平台觀看紀錄；若仍有缺口，正常續播補看，不假定完成。']
         self.store.update(job["job_id"], owner, phase="played_unverified", state="retry_wait",

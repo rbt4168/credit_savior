@@ -10,7 +10,7 @@ from urllib.parse import urljoin, urlsplit
 from .artifacts import artifact_path, atomic_write, digest
 from .browser import BrowserSession, is_login
 from .errors import WorkflowError
-from .models import Answer, Assignment, Attachment, Course, Submission, Video
+from .models import Answer, Assignment, Attachment, Course, Submission, Video, now_ms
 from .progress import coverage
 
 
@@ -147,7 +147,9 @@ class CoolClient:
             self.checked_url(path), timeout=30_000, max_redirects=0)
         if response.status in (401, 302, 303):
             raise WorkflowError("auth_expired", transient=True)
-        if response.status in (403, 404):
+        if response.status == 404:
+            raise WorkflowError('course_not_found')
+        if response.status == 403:
             raise WorkflowError("course_forbidden")
         if not response.ok:
             raise WorkflowError("network_transient", transient=True)
@@ -168,19 +170,46 @@ class CoolClient:
                 name:r.querySelector('a[href*="/courses/"]')?.textContent.trim(),
                 role:r.querySelector('.course-list-enrolled-as')?.textContent.trim()
                     || r.cells[4]?.textContent.trim()}))""")
+        async with self.session.operation(self.role):
+            details = await self.paginated('/api/v1/courses?enrollment_type=student&include[]=term&per_page=100')
+        terms = {str(value['id']): value.get('term') or {} for value in details}
         courses = {}
         for row in rows:
             match = re.search(r"/courses/(\d+)", row.get("href") or "")
             if not match:
                 continue
             cid = match[1]
+            if cid in self.config.excluded_course_ids:
+                continue
             if not self.config.all_courses and cid not in self.config.course_ids:
                 continue
             student = bool(re.search(r"student|學生|学生", row.get("role") or "", re.I))
+            if not student or cid not in terms:
+                continue
+            term = terms[cid]
+            if self.config.all_courses:
+                start, end = timestamp(term.get('start_at')), timestamp(term.get('end_at'))
+                if (start is not None and start > now_ms()) or (end is not None and end <= now_ms()):
+                    continue
             courses[cid] = Course(cid, row["name"], self.checked_url(f"/courses/{cid}"), student)
-        if not self.config.all_courses and set(self.config.course_ids) - courses.keys():
+        if not self.config.all_courses and (set(self.config.course_ids)
+                - set(self.config.excluded_course_ids) - courses.keys()):
             raise WorkflowError("course_not_enrolled")
         return list(courses.values())
+
+    async def paginated(self, path):
+        result, seen = [], set()
+        while path:
+            if path in seen:
+                raise WorkflowError('pagination_repeated')
+            seen.add(path)
+            values, links = await self._json(path)
+            if not isinstance(values, list):
+                raise WorkflowError('layout_changed')
+            result.extend(values)
+            next_link = re.search(r'<([^>]+)>;\s*rel="next"', links)
+            path = next_link[1] if next_link else None
+        return result
 
     async def list_assignments(self, course_id: str) -> list[dict]:
         async with self.session.operation(self.role) as page:

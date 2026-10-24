@@ -10,7 +10,8 @@ from credit_savior.store import Store
 @pytest.fixture
 def config(tmp_path, monkeypatch):
     for key in ('COOL_BASE_URL', 'COOL_COURSE_IDS', 'LLM_MODEL', 'DATA_DIR', 'DATABASE_PATH',
-                'AUTH_STATE_PATH', 'CHECK_INTERVAL_SECONDS', 'COOL_USERNAME', 'COOL_PASSWORD'):
+                'AUTH_STATE_PATH', 'CHECK_INTERVAL_SECONDS', 'COOL_USERNAME', 'COOL_PASSWORD',
+                'COOL_EXCLUDED_COURSE_IDS'):
         monkeypatch.delenv(key, raising=False)
     (tmp_path / '.env').write_text('COOL_COURSE_IDS=all\nCOOL_USERNAME=test-owner\n'
                                  'COOL_PASSWORD=local-test-secret\n', encoding='utf-8')

@@ -35,6 +35,7 @@ class Config:
     model: str
     timezone: str
     discord_webhook: str = field(default='', repr=False)
+    excluded_course_ids: tuple[str, ...] = ()
 
     @classmethod
     def load(cls, root: Path, *, require_auth: bool = False) -> Config:
@@ -52,6 +53,10 @@ class Config:
             invalid.append("COOL_COURSE_IDS")
         if all_courses:
             ids = ()
+        excluded = tuple(dict.fromkeys(x.strip() for x in
+            (values.get('COOL_EXCLUDED_COURSE_IDS') or '').split(',') if x.strip()))
+        if any(not x.isdigit() or int(x) < 1 for x in excluded):
+            invalid.append('COOL_EXCLUDED_COURSE_IDS')
         interval = values.get("CHECK_INTERVAL_SECONDS") or "600"
         if interval != "600":
             invalid.append("CHECK_INTERVAL_SECONDS")
@@ -92,4 +97,4 @@ class Config:
         if invalid:
             raise ConfigError(invalid)
         return cls(root, base, username, password, ids, all_courses, 600, headless == "true",
-                   auth, data, database, model, timezone, webhook)
+                   auth, data, database, model, timezone, webhook, excluded)

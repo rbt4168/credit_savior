@@ -15,6 +15,7 @@ from .models import Answer
 from .workers import follow_up_notes
 from .errors import WorkflowError
 from .models import now_ms
+from .monitoring import monitoring_states
 
 
 class NoRedirect(HTTPRedirectHandler):
@@ -358,6 +359,20 @@ class Notifier:
         for code in set(alerts) - active_alerts:
             del alerts[code]
             write_json(self.path, self.state)
+        for state in monitoring_states(self.config.data_dir, store.enabled_course_ids()):
+            for source, entry in state['entries'].items():
+                if not entry['notify']:
+                    continue
+                key = {'course_source': source, 'course_id': state['course_id'],
+                       'changed_at_ms': entry['changed_at_ms'], 'content_hash': entry['hash']}
+                if canonical_hash(key) in self.state['delivered']:
+                    continue
+                record = entry['record']
+                details = '\n'.join(f'{k}: {v}' for k, v in record.get('dates', {}).items())
+                message = item_message(store.course_name(state['course_id']),
+                    store.course_code(state['course_id']), '課程更新', record['title'],
+                    record['url'] + '\n' + details + '\n' + record['text'][:1300])
+                await self.send([key], message)
         last = store.summary()['last_scan']
         if last and last['state'] == 'partial':
             code = last['error_code'] or 'scan_partial'

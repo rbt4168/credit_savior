@@ -86,6 +86,9 @@ async def test_scan_enriches_course_code_before_assignment_processing(config, st
         async def list_videos(self, course_id):
             return []
 
+    from unittest.mock import AsyncMock, patch
+
     scan_id = store.start_scan(store.clock())
-    await Scanner(Client(), store).course(Course('1', 'Test', 'url'), scan_id)
+    with patch('credit_savior.scanner.monitor_course', AsyncMock(return_value={'errors': []})):
+        await Scanner(Client(), store).course(Course('1', 'Test', 'url'), scan_id)
     assert calls == ['information', 'assignments']

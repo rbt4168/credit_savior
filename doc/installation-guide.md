@@ -147,7 +147,8 @@ Codex 執行此命令後，使用者在自己電腦的 Windows 對話框填 NTU 
 | 設定 | 正式值 |
 | --- | --- |
 | COOL_BASE_URL | `https://cool.ntu.edu.tw` |
-| COOL_COURSE_IDS | `all`：所有已加入的學生課程；助教 enrollment 略過。也可填 URL 中的數字 Canvas 內部 ID，以逗號分隔；這不是課程資訊中的正式課號。 |
+| COOL_COURSE_IDS | `all`：依平台學期起訖日期篩選當期學生課程；助教 enrollment 略過，未提供學期日期的課程保留。也可明確指定 Canvas 內部 ID，以逗號分隔，允許手動選取舊課。 |
+| COOL_EXCLUDED_COURSE_IDS | 逗號分隔的 Canvas 內部 ID；優先排除，包含 `all` 和明確選課模式。 |
 | CHECK_INTERVAL_SECONDS | `600`；目前程式拒絕其他值。 |
 | BROWSER_HEADLESS | `true`；互動 `auth` 仍會開可見瀏覽器。 |
 | LLM_MODEL | `gpt-6.1-sol`；目前程式拒絕其他模型。 |
@@ -299,6 +300,16 @@ Get-ScheduledTask -TaskName NTU-COOL-credit-savior | Select-Object TaskName,Stat
 前景程式用 Ctrl+C 或另一個 shell 的 `python -m credit_savior stop` 正常停止。`run --once` 只掃描並處理作業，不播放影片，也不安裝排程。不要以 `Start-Process` 隨意另起一個 worker，造成無法追蹤的背景實例。
 
 ## 8. 運行驗收
+
+常駐在啟動 worker 前先套用課程篩選，停用範圍外課程及其待處理任務；已提交回執與未決提交 intent 保留。重新納入課程後可恢復先前停用的任務。影片依嘗試次數優先輪替，再按課程與播放清單順序取件，避免前面反覆重試的影片一直阻擋其他課程。平台摘要讀不到時延後核對，不因此重播或標記完成。
+
+每輪另讀課程資訊、公告、討論主題與回覆時間、所有作業（含紙本要求）、頁面、單元項目與日曆。一般外站使用本機 `data/monitoring/sources.json` 指定實際課程頁面：
+
+```json
+{"courses":{"12345":["https://example.edu/course/schedule.html"]}}
+```
+
+外站只讀公開 HTML／文字／CSV／PDF，不帶 COOL 憑證；不會任意遞迴追蹤整個網站。含框架的網站應指定內容頁。巡檢結果與來源錯誤留在 `data/monitoring/`；status 的 `monitoring` 顯示覆蓋及錯誤。平台回傳 404 的 Pages 功能另列為未提供，403 或其他來源失敗仍列為錯誤。每個來源第一次成功讀取建立基準，不把歷史公告整批重發；之後新增或變更的資訊依現有 Discord 設定去重通知。這些更新不會直接當成可自動提交的作業。
 
 啟動後等候新的 health 檔，並觀察至少兩次 heartbeat（間隔約 30 秒）：
 

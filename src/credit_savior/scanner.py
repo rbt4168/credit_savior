@@ -8,6 +8,7 @@ from .artifacts import write_json
 from .cool import submission_from_api, timestamp
 from .errors import WorkflowError
 from .models import now_ms
+from .monitoring import monitor_course
 
 
 def next_tick(origin: float, current: float, interval: float) -> float:
@@ -21,6 +22,13 @@ class Scanner:
         self.data_dir = client.config.data_dir
         self.budget_s = budget_s
         self.course_cursor = 0
+
+    async def sync_courses(self):
+        courses = await self.client.list_courses()
+        for course in courses:
+            self.store.upsert_course(course)
+        self.store.restrict_courses({course.course_id for course in courses if course.student})
+        return courses
 
     async def course(self, course, scan_id):
         if not course.student:
@@ -72,19 +80,18 @@ class Scanner:
                     "video", course.course_id, video.video_id, video.revision, relative,
                     checkpoint={"playlist_order": video.order, "last_position_s": 0},
                 )
+        coverage = await monitor_course(self.client, course.course_id)
         self.store.record_course_scan(scan_id, course.course_id, "succeeded",
                                      len(assignments), len(videos))
-        return {"examined": len(assignments), "eligible": eligible}
+        return {"examined": len(assignments), "eligible": eligible, 'source_errors': coverage['errors']}
 
     async def once(self, scheduled_at_ms=None):
         scan_id = self.store.start_scan(scheduled_at_ms or now_ms())
         started = time.monotonic()
         counters = {"course_count": 0, "examined": 0, "eligible": 0, "errors": []}
         try:
-            courses = await self.client.list_courses()
+            courses = await self.sync_courses()
             counters["course_count"] = len(courses)
-            for course in courses:
-                self.store.upsert_course(course)
             if courses:
                 offset = self.course_cursor % len(courses)
                 ordered = courses[offset:] + courses[:offset]
@@ -104,6 +111,10 @@ class Scanner:
                     result = await asyncio.wait_for(self.course(course, scan_id), remaining)
                     counters["examined"] += result["examined"]
                     counters["eligible"] += result["eligible"]
+                    if result.get('source_errors'):
+                        self.store.record_course_scan(scan_id, course.course_id, 'failed',
+                            error_code='course_source_incomplete')
+                        counters['errors'].append('course_source_incomplete')
                 except asyncio.TimeoutError:
                     self.store.record_course_scan(scan_id, course.course_id, "budget_exceeded",
                                                   error_code="scan_capacity_exceeded")

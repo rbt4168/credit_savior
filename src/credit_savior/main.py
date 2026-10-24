@@ -25,6 +25,7 @@ from .store import Store
 from .videos import VideoWorker
 from .workers import follow_up_notes, worker_loop
 from .discord import Notifier, problem_message
+from .monitoring import monitoring_summary
 
 
 def configure_logs(data_dir):
@@ -54,6 +55,7 @@ def publish_health(config, store, session, state="running", error_code=None):
     write_json(config.data_dir / "health.json", {
         "schema_version": 1, "process_state": state, "heartbeat_at_ms": now_ms(),
         "session_state": session.state, **store.summary(), "last_error_code": error_code,
+        'monitoring': monitoring_summary(config.data_dir, store.enabled_course_ids()),
     })
 
 
@@ -117,6 +119,7 @@ async def online(config, command, *, once=False):
                 publish_health(config, store, session, "completed_once")
                 await notifier.poll(store)
                 return {"scan": result, **store.summary()}
+            await scanner.sync_courses()
             tasks = [
                 asyncio.create_task(scanner.run(stop)),
                 asyncio.create_task(worker_loop(assignment_worker, owner + ":assignment", stop)),

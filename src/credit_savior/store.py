@@ -51,6 +51,23 @@ class Store:
     def close(self):
         self.db.close()
 
+    def enabled_course_ids(self):
+        return {row[0] for row in self.db.execute('SELECT course_id FROM courses WHERE enabled=1')}
+
+    def restrict_courses(self, course_ids):
+        with self.transaction() as db:
+            for row in db.execute('SELECT course_id FROM courses').fetchall():
+                enabled = row[0] in course_ids
+                db.execute('UPDATE courses SET enabled=? WHERE course_id=?', (int(enabled), row[0]))
+            db.execute("""UPDATE jobs SET state='cancelled',error_code='course_excluded',
+                lease_owner=NULL,lease_until_ms=NULL,updated_at_ms=?
+                WHERE course_id IN (SELECT course_id FROM courses WHERE enabled=0)
+                AND state IN ('queued','retry_wait','needs_input','failed')
+                AND job_id NOT IN (SELECT job_id FROM submission_attempts
+                    WHERE state IN ('dispatching','uncertain'))""", (self.clock(),))
+            db.execute("""UPDATE submission_attempts SET state='abandoned' WHERE state='prepared'
+                AND job_id IN (SELECT job_id FROM jobs WHERE state='cancelled')""")
+
     def upsert_course(self, course: Course):
         with self.transaction() as db:
             db.execute(
@@ -101,7 +118,10 @@ class Store:
             progress_state,last_seen_at_ms) VALUES (?,?,?,?,?,?,?,?)
             ON CONFLICT(course_id,video_id) DO UPDATE SET url=excluded.url,
             player_kind=excluded.player_kind,source_revision=excluded.source_revision,
-            duration_s=excluded.duration_s,progress_state=excluded.progress_state,
+            duration_s=COALESCE(excluded.duration_s,videos.duration_s),
+            progress_state=CASE WHEN videos.source_revision=excluded.source_revision
+                AND excluded.progress_state='unknown' THEN videos.progress_state
+                ELSE excluded.progress_state END,
             last_position_s=CASE WHEN videos.source_revision=excluded.source_revision
                 THEN videos.last_position_s ELSE 0 END,last_seen_at_ms=excluded.last_seen_at_ms""",
             (video.course_id, video.video_id, video.url, video.player_kind, video.revision,
@@ -123,6 +143,10 @@ class Store:
                 "SELECT job_id,state,error_code FROM jobs WHERE kind=? AND course_id=? AND subject_id=? AND revision=?",
                 (kind, course_id, subject_id, revision)).fetchone()
             if existing:
+                if existing['state'] == 'cancelled' and existing['error_code'] == 'course_excluded':
+                    db.execute("""UPDATE jobs SET state=?,error_code=?,retry_after_ms=?,updated_at_ms=?
+                        WHERE job_id=? AND course_id IN (SELECT course_id FROM courses WHERE enabled=1)""",
+                        (state, error_code, retry_after_ms, self.clock(), existing['job_id']))
                 if (kind == 'assignment' and state == 'queued' and existing['state'] == 'cancelled'
                         and existing['error_code'] in {'ineligible', 'assignment_expired', 'assignment_closed'}
                         and not self.pending(course_id, subject_id)):
@@ -158,10 +182,12 @@ class Store:
         at = self.clock()
         with self.transaction() as db:
             row = db.execute(
-                """SELECT * FROM jobs WHERE kind=? AND (state='queued' OR
+                """SELECT * FROM jobs WHERE kind=? AND course_id IN
+                (SELECT course_id FROM courses WHERE enabled=1) AND (state='queued' OR
                 (state='retry_wait' AND retry_after_ms<=?))
                 ORDER BY CASE WHEN phase='reconciling' THEN 0 ELSE 1 END,
                 priority_due_at_ms IS NULL,priority_due_at_ms,
+                CASE WHEN kind='video' THEN run_attempt ELSE 0 END,
                 CASE WHEN kind='video' THEN course_id ELSE '' END,
                 CASE WHEN kind='video' THEN json_extract(checkpoint_json,'$.playlist_order') ELSE 0 END,
                 created_at_ms,job_id LIMIT 1""",
@@ -174,6 +200,13 @@ class Store:
                 (owner, at + 120_000, at, row["job_id"]),
             )
         return self.get(row["job_id"])
+
+    def complete_video(self, job_id, owner):
+        with self.transaction() as db:
+            job = self.update(job_id, owner, phase='completed', state='succeeded')
+            db.execute("""UPDATE videos SET progress_state='complete' WHERE course_id=?
+                AND video_id=? AND source_revision=?""",
+                (job['course_id'], job['subject_id'], job['revision']))
 
     def assert_owned(self, job_id: str, owner: str):
         row = self.db.execute(
